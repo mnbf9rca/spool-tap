@@ -28,3 +28,11 @@ struct TagHints {
     std::string min_temp_c;
     std::string max_temp_c;
 };
+
+struct SettingsInput {
+    std::string spoolman_url = "https://spoolman.cynexia.net";
+    std::string filabridge_url = "https://filabridge.cynexia.net";
+    std::string printer_name = "Core One";
+    int32_t toolhead_id = 0;
+    std::string reader_id = "spool-tap-cores3";
+};
