@@ -40,10 +40,16 @@ repo=$(git -C "$(dirname "$0")" rev-parse --show-toplevel)
 check "op service account token valid" op whoami
 
 # Every reference in .env.tpl must resolve. The value goes to /dev/null; the
-# test is only that it is non-empty.
-for ref in $(sed -n 's/^[A-Za-z_][A-Za-z0-9_]*=\(op:\/\/.*\)$/\1/p' "$repo/.env.tpl"); do
-  check "op read $ref" sh -c '[ -n "$(op read "$1")" ]' _ "$ref"
+# test is only that it is non-empty. References may contain spaces, so read
+# whole lines; rc is captured through a file because the loop runs in a subshell.
+rc_file=$(mktemp)
+sed -n 's/^[A-Za-z_][A-Za-z0-9_]*=\(op:\/\/.*\)$/\1/p' "$repo/.env.tpl" | while IFS= read -r ref; do
+  # shellcheck disable=SC2016  # the $-expression is for the child sh, deliberately
+  check "op read $ref" sh -c '[ -n "$(op read "$1")" ]' _ "$ref" || true
+  [ "$rc" -eq 0 ] || echo 1 > "$rc_file"
 done
+[ -s "$rc_file" ] && rc=1
+rm -f "$rc_file"
 
 if [ "$check_worktrees" -eq 1 ]; then
   # A for loop, not a pipeline into `while read`: a pipeline runs the loop in a
