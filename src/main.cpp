@@ -3,11 +3,19 @@
 #include "nfc_reader.hpp"
 #include "tag_ndef.hpp"
 #include "tag_decode.hpp"
+#include "net.hpp"
 
 namespace {
 NfcReader reader;
+Net net;
 bool reader_ready = false;
 uint32_t last_heartbeat = 0;
+uint32_t last_net_status = 0;
+size_t next_probe = 0;
+const char* const kProbeUrls[] = {
+    "https://spoolman.cynexia.net/",
+    "https://filabridge.cynexia.net/api/status",
+};
 }  // namespace
 
 void setup() {
@@ -15,16 +23,33 @@ void setup() {
     M5.begin();
 
     reader_ready = reader.begin();
+    net.begin();
 
     M5.Display.fillScreen(reader_ready ? TFT_DARKGREEN : TFT_RED);
     M5.Display.setTextSize(3);
     M5.Display.setCursor(0, 0);
     M5.Display.printf("Spool Tap\nNFC %s\n", reader_ready ? "ready" : "error");
     Serial.printf("SPOOL_TAP_BOOT NFC_READY=%d\n", reader_ready);
+    Serial.println("NET_WAIT Wi-Fi and clock");
 }
 
 void loop() {
     M5.update();
+    if (next_probe < sizeof(kProbeUrls) / sizeof(kProbeUrls[0]) &&
+        millis() - last_net_status >= 2000) {
+        ApiError error;
+        if (net.ready(error)) {
+            if (next_probe == 0) Serial.println("NET_READY Wi-Fi connected; clock valid");
+            const char* url = kProbeUrls[next_probe++];
+            HttpResponse response;
+            if (net.request("GET", url, "", response, error))
+                Serial.printf("NET_GET %s HTTP=%d BYTES=%u\n", url, response.status, response.body.size());
+            else Serial.printf("NET_GET %s ERROR=%s\n", url, apiErrorLabel(error));
+        } else {
+            Serial.printf("NET_WAIT %s\n", apiErrorLabel(error));
+        }
+        last_net_status = millis();
+    }
     TagRead tag;
     if (reader.poll(tag)) {
         Serial.printf("NFC_TAG UID=%s TECH=%c TYPE=%s CAPACITY=%u\n", tag.uid.c_str(),
