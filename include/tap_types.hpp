@@ -16,3 +16,15 @@ struct TagRead {
     uint8_t block_size = 0;
     std::vector<uint8_t> memory;
 };
+
+struct TagHints {
+    std::string format;
+    std::string brand;
+    std::string material;
+    std::string material_type;
+    std::string color_hex;
+    std::string identifier;
+    double nominal_weight_g = 0;
+    std::string min_temp_c;
+    std::string max_temp_c;
+};
