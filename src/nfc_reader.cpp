@@ -51,6 +51,15 @@ bool NfcReader::poll(TagRead& out) {
             layer_a_.identify(picc);
             seen.type = picc.typeAsString();
             seen.capacity = picc.userAreaSize();
+            seen.block_size = picc.unitSize();
+            if (picc.nfcForumTagType() == m5::nfc::NFCForumTag::Type2 &&
+                seen.block_size == 4 && seen.capacity + 4 <= kMaxTagMemoryBytes && layer_a_.reactivate(picc)) {
+                seen.memory.resize(seen.capacity + 4);
+                uint16_t length = seen.memory.size();
+                if (!layer_a_.read(seen.memory.data(), length, static_cast<uint8_t>(3)) ||
+                    length != seen.memory.size()) seen.memory.clear();
+                layer_a_.deactivate();
+            }
             out = seen;
             return true;
         }
@@ -66,25 +75,15 @@ bool NfcReader::poll(TagRead& out) {
             if (!gate_.observe(&seen)) return false;
             seen.type = picc.typeAsString();
             seen.capacity = picc.userAreaSize();
-            out = seen;
-
-            if (picc.valid() && seen.capacity <= 512 && layer_v_.reactivate(picc)) {
-                m5::nfc::ndef::TLV message;
-                const bool ok = layer_v_.ndefRead(message);
-                Serial.printf("V_NDEF_OK=%d MESSAGE=%d\n", ok, ok && message.isMessageTLV());
-                if (ok && message.isMessageTLV()) {
-                    for (const auto& record : message.records()) {
-                        if (std::string(record.type()) != "application/vnd.openprinttag" ||
-                            record.payloadSize() > seen.capacity || record.payloadSize() > 512) continue;
-                        Serial.print("V_NDEF_HEX=");
-                        for (uint32_t i = 0; i < record.payloadSize(); ++i) {
-                            Serial.printf("%02X", record.payload()[i]);
-                        }
-                        Serial.println();
-                    }
-                }
+            seen.block_size = picc.block_size;
+            if (picc.valid() && seen.capacity <= kMaxTagMemoryBytes && layer_v_.reactivate(picc)) {
+                seen.memory.resize(seen.capacity);
+                uint16_t length = seen.memory.size();
+                if (!layer_v_.read(seen.memory.data(), length, 0) ||
+                    length != seen.memory.size()) seen.memory.clear();
                 layer_v_.deactivate();
             }
+            out = seen;
             return true;
         }
     }
