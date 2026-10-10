@@ -144,7 +144,7 @@ void test_filament_only_prompts_for_spool_assignment_without_load() {
     TEST_ASSERT_EQUAL_INT(static_cast<int>(UiAction::Back), static_cast<int>(ui.actionAt(220, 210)));
 }
 
-void test_archived_missing_and_bad_ndef_have_specific_no_load_views() {
+void test_archived_and_missing_spools_have_specific_no_load_views() {
     Ui ui;
     ScanMatch match;
     match.kind = ScanKind::Spool;
@@ -159,12 +159,43 @@ void test_archived_missing_and_bad_ndef_have_specific_no_load_views() {
     ui.showError(ApiError::InvalidTag);
     TEST_ASSERT_TRUE(hasLine(ui.visibleLines(5), "Tag UID"));
     TEST_ASSERT_TRUE(hasLine(ui.visibleLines(5), "unreadable"));
+}
+
+void test_unreadable_ndef_keeps_linked_spool_loadable() {
+    Ui ui;
+    TagRead tag;
     tag.ndef_malformed = true;
-    match.spool.archived = false;
-    ui.showTag(tag, {}, match, nullptr);
+    ScanMatch match;
+    match.kind = ScanKind::Spool;
+    match.spool_id = 7;
+    match.spool = spool();
+    SpoolInfo current = spool(1);
+    current.name = "Already loaded";
+    ui.showTag(tag, {}, match, &current);
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(UiScreen::Tag), static_cast<int>(ui.view().screen));
+    TEST_ASSERT_TRUE(hasLine(ui.visibleLines(5), "Jet Black"));
     TEST_ASSERT_TRUE(hasLine(ui.visibleLines(5), "Tag data"));
     TEST_ASSERT_TRUE(hasLine(ui.visibleLines(5), "unreadable"));
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(UiAction::Load), static_cast<int>(ui.actionAt(40, 210)));
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(UiAction::Cancel), static_cast<int>(ui.actionAt(220, 210)));
+}
+
+void test_unreadable_ndef_without_spool_prompts_for_assignment() {
+    Ui ui;
+    TagRead tag;
+    tag.uid = "E0040150ABCD1234";
+    tag.ndef_malformed = true;
+    TagHints hints;
+    hints.brand = "Ignore this";
+    ui.showTag(tag, hints, {}, nullptr);
+    TEST_ASSERT_EQUAL_STRING("No spool linked", ui.view().title.c_str());
+    TEST_ASSERT_TRUE(hasLine(ui.visibleLines(5), "E0040150ABCD1234"));
+    TEST_ASSERT_TRUE(hasLine(ui.visibleLines(5), "Tag data"));
+    TEST_ASSERT_TRUE(hasLine(ui.visibleLines(5), "unreadable"));
+    TEST_ASSERT_FALSE(hasLine(ui.visibleLines(5), "Ignore this"));
+    TEST_ASSERT_TRUE(hasLine(ui.visibleLines(5), "Assign in"));
     TEST_ASSERT_EQUAL_INT(static_cast<int>(UiAction::None), static_cast<int>(ui.actionAt(40, 210)));
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(UiAction::Back), static_cast<int>(ui.actionAt(220, 210)));
 }
 
 void test_working_confirmation_status_and_touch_bounds() {
@@ -274,7 +305,9 @@ void setup() {
     RUN_TEST(test_linked_tag_preview_offers_load_and_cancel);
     RUN_TEST(test_unknown_tag_shows_uid_type_hints_and_back_only);
     RUN_TEST(test_filament_only_prompts_for_spool_assignment_without_load);
-    RUN_TEST(test_archived_missing_and_bad_ndef_have_specific_no_load_views);
+    RUN_TEST(test_archived_and_missing_spools_have_specific_no_load_views);
+    RUN_TEST(test_unreadable_ndef_keeps_linked_spool_loadable);
+    RUN_TEST(test_unreadable_ndef_without_spool_prompts_for_assignment);
     RUN_TEST(test_working_confirmation_status_and_touch_bounds);
     RUN_TEST(test_long_and_untrusted_tag_text_is_wrapped_and_sanitized);
     RUN_TEST(test_wrapping_does_not_split_a_utf8_character);

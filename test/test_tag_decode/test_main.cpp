@@ -101,6 +101,23 @@ void test_selects_supported_mime_after_unrelated_record() {
     TEST_ASSERT_FALSE(decodeTag({wrong_tnf}, hints));
 }
 
+void test_uri_only_ndef_is_valid_but_has_no_open_tag_hints() {
+    TagRead tag;
+    tag.uid = "04527D12136F81";
+    tag.technology = TagTechnology::A;
+    tag.capacity = 504;
+    tag.block_size = 4;
+    tag.memory = {0xE1, 0x10, 0x3F, 0x00, 0x03, 0x06,
+                  0xD1, 0x01, 0x02, 'U', 0x03, 'x', 0xFE, 0, 0, 0};
+    std::vector<NdefRecord> records;
+    TEST_ASSERT_TRUE(extractNdef(tag, records));
+    TEST_ASSERT_EQUAL_UINT32(1, records.size());
+    TEST_ASSERT_EQUAL_STRING("U", records[0].type.c_str());
+    TagHints hints;
+    TEST_ASSERT_FALSE(decodeTag(records, hints));
+    TEST_ASSERT_EQUAL_STRING("04527D12136F81", tag.uid.c_str());
+}
+
 void test_half_float_nominal_and_json_depth_limit() {
     const auto half = record("application/vnd.openprinttag", {
         0xA0, 0xA1, 0x10, 0xF9, 0x63, 0xD0
@@ -126,6 +143,7 @@ void setup() {
     RUN_TEST(test_empty_aux_and_truncated_regions);
     RUN_TEST(test_openspool_and_bad_json);
     RUN_TEST(test_selects_supported_mime_after_unrelated_record);
+    RUN_TEST(test_uri_only_ndef_is_valid_but_has_no_open_tag_hints);
     RUN_TEST(test_half_float_nominal_and_json_depth_limit);
     UNITY_END();
 }

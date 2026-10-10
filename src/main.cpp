@@ -104,13 +104,12 @@ void loop() {
                       tag.technology == TagTechnology::A ? 'A' : 'V', tag.type.c_str(), tag.capacity);
         TagHints hints;
         bool decoded = false;
-        bool unreadable = false;
         if (!tag.memory.empty()) {
             std::vector<NdefRecord> records;
             const bool ndef_ok = extractNdef(tag, records);
             Serial.printf("NFC_NDEF_OK=%d RECORDS=%u\n", ndef_ok, records.size());
             decoded = ndef_ok && decodeTag(records, hints);
-            unreadable = !ndef_ok || (!decoded && !records.empty());
+            tag.ndef_malformed = !ndef_ok;
 #if defined(SPOOL_TAP_CAPTURE_NDEF)
             for (const auto& record : records) {
                 if (record.type != "application/vnd.openprinttag" || record.payload.size() > 512) continue;
@@ -121,7 +120,6 @@ void loop() {
 #endif
         }
         if (decoded) tag.format = hints.format;
-        tag.ndef_malformed = unreadable;
         ui.showWorking();
         ui.render();
         ScanMatch match;

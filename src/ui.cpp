@@ -179,20 +179,18 @@ void Ui::showHome(const Mapping& mapping, const SpoolInfo* spool) {
 
 void Ui::showTag(const TagRead& tag, const TagHints& hints, const ScanMatch& match,
                  const SpoolInfo* current_spool) {
-    if (tag.ndef_malformed) {
-        start(UiScreen::Error, "Tag");
-        lines_.push_back({"Tag data unreadable", 0});
-    } else if (match.kind == ScanKind::Spool && match.spool.archived) {
+    if (match.kind == ScanKind::Spool && match.spool.archived) {
         showError(ApiError::ArchivedSpool);
     } else if (match.kind == ScanKind::Spool && match.spool.id == match.spool_id && match.spool_id) {
         start(UiScreen::Tag, "Spool linked");
         const std::string material = spoolMaterial(match.spool);
-        if (!material.empty()) lines_.push_back({safeText(material), 0});
+        if (!material.empty()) lines_.push_back({safeText(material), static_cast<uint8_t>(tag.ndef_malformed ? 2 : 0)});
         if (!match.spool.name.empty()) lines_.push_back({safeText(match.spool.name), 0});
         lines_.push_back({remainingText(match.spool.remaining_g), 0});
+        if (tag.ndef_malformed) lines_.push_back({"Tag data unreadable", 1});
         if (current_spool && current_spool->id) {
             lines_.push_back({"Current spool", 2});
-            lines_.push_back({safeText(current_spool->name), 1});
+            lines_.push_back({safeText(current_spool->name), static_cast<uint8_t>(tag.ndef_malformed ? 2 : 1)});
         }
         view_.color_hex = match.spool.color_hex;
         view_.left = UiAction::Load;
@@ -202,22 +200,26 @@ void Ui::showTag(const TagRead& tag, const TagHints& hints, const ScanMatch& mat
         start(UiScreen::Tag, "Filament found");
         lines_.push_back({"No spool linked", 0});
         lines_.push_back({"Assign in Spoolman", 0});
+        if (tag.ndef_malformed) lines_.push_back({"Tag data unreadable", 1});
         lines_.push_back({safeText(tag.uid), 2});
     } else {
         start(UiScreen::Tag, "No spool linked");
         lines_.push_back({safeText(tag.uid), 0});
-        lines_.push_back({safeText(tag.type), 1});
-        const std::string material = hints.material_type.empty() ? hints.material : hints.material_type;
-        if (!hints.brand.empty() || !material.empty())
-            lines_.push_back({safeText(hints.brand + " " + material), 1});
-        if (!hints.material_type.empty() && !hints.material.empty())
-            lines_.push_back({safeText(hints.material), 2});
-        if (!hints.identifier.empty()) lines_.push_back({safeText(hints.identifier), 3});
-        if (std::isfinite(hints.nominal_weight_g) && hints.nominal_weight_g > 0)
-            lines_.push_back({"Nominal " + std::to_string(static_cast<long>(std::lround(hints.nominal_weight_g))) + "g", 3});
-        if (!hints.min_temp_c.empty() || !hints.max_temp_c.empty())
-            lines_.push_back({safeText(hints.min_temp_c + "-" + hints.max_temp_c + "C"), 3});
-        view_.color_hex = hints.color_hex;
+        if (tag.ndef_malformed) lines_.push_back({"Tag data unreadable", 1});
+        else {
+            lines_.push_back({safeText(tag.type), 1});
+            const std::string material = hints.material_type.empty() ? hints.material : hints.material_type;
+            if (!hints.brand.empty() || !material.empty())
+                lines_.push_back({safeText(hints.brand + " " + material), 1});
+            if (!hints.material_type.empty() && !hints.material.empty())
+                lines_.push_back({safeText(hints.material), 2});
+            if (!hints.identifier.empty()) lines_.push_back({safeText(hints.identifier), 3});
+            if (std::isfinite(hints.nominal_weight_g) && hints.nominal_weight_g > 0)
+                lines_.push_back({"Nominal " + std::to_string(static_cast<long>(std::lround(hints.nominal_weight_g))) + "g", 3});
+            if (!hints.min_temp_c.empty() || !hints.max_temp_c.empty())
+                lines_.push_back({safeText(hints.min_temp_c + "-" + hints.max_temp_c + "C"), 3});
+            view_.color_hex = hints.color_hex;
+        }
         lines_.push_back({"Assign in Spoolman", 0});
     }
     view_.right = UiAction::Back;
