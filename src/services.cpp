@@ -185,3 +185,45 @@ bool Services::scan(const TagRead& tag, ScanMatch& out, ApiError& error) {
     error = ApiError::None;
     return true;
 }
+
+bool Services::mapToolhead(uint32_t spool_id, Mapping& after, ApiError& error) {
+    Json request(cJSON_CreateObject(), cJSON_Delete);
+    if (!request ||
+        !cJSON_AddStringToObject(request.get(), "printer_name", settings_.current().printer_name.c_str()) ||
+        !cJSON_AddNumberToObject(request.get(), "toolhead_id", settings_.current().toolhead_id) ||
+        !cJSON_AddNumberToObject(request.get(), "spool_id", spool_id)) {
+        error = ApiError::Http;
+        return false;
+    }
+    std::unique_ptr<char, decltype(&cJSON_free)> encoded(cJSON_PrintUnformatted(request.get()), cJSON_free);
+    if (!encoded) { error = ApiError::Http; return false; }
+
+    HttpResponse response;
+    ApiError post_error = ApiError::None;
+    const std::string url = settings_.current().filabridge_url + "/api/map_toolhead";
+    const bool posted = transport_.request("POST", url.c_str(), encoded.get(), response, post_error);
+    if (!posted && post_error == ApiError::None) post_error = ApiError::Http;
+    if (posted) {
+        if (response.status == 409) post_error = ApiError::Conflict;
+        else if (response.status != 200) post_error = ApiError::Http;
+        else {
+            Json reply = parseJson(response.body);
+            const cJSON* message = cJSON_GetObjectItemCaseSensitive(reply.get(), "message");
+            if (!cJSON_IsObject(reply.get()) || !cJSON_IsString(message))
+                post_error = ApiError::Malformed;
+        }
+    }
+
+    Mapping observed;
+    ApiError read_error = ApiError::None;
+    if (!getMapping(observed, read_error)) { error = read_error; return false; }
+    after = observed;
+    if (!posted && post_error == ApiError::Timeout && observed.spool_id == spool_id) {
+        error = ApiError::None;
+        return true;
+    }
+    if (post_error != ApiError::None) { error = post_error; return false; }
+    if (observed.spool_id != spool_id) { error = ApiError::Malformed; return false; }
+    error = ApiError::None;
+    return true;
+}
