@@ -4,18 +4,22 @@
 #include "tag_ndef.hpp"
 #include "tag_decode.hpp"
 #include "net.hpp"
+#include "services.hpp"
+#include "settings.hpp"
 
 namespace {
 NfcReader reader;
 Net net;
+Settings settings;
+NvsSettingsStore settings_store;
+Services services(net, settings);
+Mapping current_mapping;
+SpoolInfo current_spool;
 bool reader_ready = false;
 uint32_t last_heartbeat = 0;
 uint32_t last_net_status = 0;
-size_t next_probe = 0;
-const char* const kProbeUrls[] = {
-    "https://spoolman.cynexia.net/",
-    "https://filabridge.cynexia.net/api/status",
-};
+enum class BootRead { Mapping, Spool, Done };
+BootRead boot_read = BootRead::Mapping;
 }  // namespace
 
 void setup() {
@@ -23,6 +27,8 @@ void setup() {
     M5.begin();
 
     reader_ready = reader.begin();
+    if (!settings_store.begin() || !settings.load(settings_store))
+        Serial.println("SETTINGS_FAULT using defaults");
     net.begin();
 
     M5.Display.fillScreen(reader_ready ? TFT_DARKGREEN : TFT_RED);
@@ -35,16 +41,19 @@ void setup() {
 
 void loop() {
     M5.update();
-    if (next_probe < sizeof(kProbeUrls) / sizeof(kProbeUrls[0]) &&
-        millis() - last_net_status >= 2000) {
+    if (boot_read != BootRead::Done && millis() - last_net_status >= 2000) {
         ApiError error;
         if (net.ready(error)) {
-            if (next_probe == 0) Serial.println("NET_READY Wi-Fi connected; clock valid");
-            const char* url = kProbeUrls[next_probe++];
-            HttpResponse response;
-            if (net.request("GET", url, "", response, error))
-                Serial.printf("NET_GET %s HTTP=%d BYTES=%u\n", url, response.status, response.body.size());
-            else Serial.printf("NET_GET %s ERROR=%s\n", url, apiErrorLabel(error));
+            if (boot_read == BootRead::Mapping) {
+                if (services.getMapping(current_mapping, error)) {
+                    Serial.printf("BRIDGE_MAPPING SPOOL_ID=%u\n", current_mapping.spool_id);
+                    boot_read = current_mapping.spool_id ? BootRead::Spool : BootRead::Done;
+                } else Serial.printf("BRIDGE_ERROR %s\n", apiErrorLabel(error));
+            } else if (services.getSpool(current_mapping.spool_id, current_spool, error)) {
+                Serial.printf("SPOOLMAN_SPOOL ID=%u REMAINING_G=%.2f\n",
+                              current_spool.id, current_spool.remaining_g);
+                boot_read = BootRead::Done;
+            } else Serial.printf("SPOOLMAN_ERROR %s\n", apiErrorLabel(error));
         } else {
             Serial.printf("NET_WAIT %s\n", apiErrorLabel(error));
         }

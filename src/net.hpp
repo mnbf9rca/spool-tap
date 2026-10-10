@@ -3,7 +3,7 @@
 #include <ctime>
 #include <string>
 
-enum class ApiError { None, Wifi, Time, Dns, Tls, Timeout, Http, TooLarge, InvalidUrl };
+#include "tap_types.hpp"
 
 struct HttpResponse {
     int status = 0;

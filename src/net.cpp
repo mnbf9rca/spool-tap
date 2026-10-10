@@ -162,6 +162,10 @@ const char* apiErrorLabel(ApiError error) {
     case ApiError::TooLarge: return "Response too large";
     case ApiError::InvalidUrl: return "Invalid HTTPS URL";
     case ApiError::Http: return "HTTP request failed";
+    case ApiError::Malformed: return "Invalid service response";
+    case ApiError::MissingSpool: return "Spool not found";
+    case ApiError::ArchivedSpool: return "Spool archived";
+    case ApiError::Conflict: return "Spool already in use";
     }
     return "HTTP request failed";
 }

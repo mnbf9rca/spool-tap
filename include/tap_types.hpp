@@ -36,3 +36,23 @@ struct SettingsInput {
     int32_t toolhead_id = 0;
     std::string reader_id = "spool-tap-cores3";
 };
+
+struct Mapping {
+    uint32_t spool_id = 0;
+    bool stale = false;
+};
+
+struct SpoolInfo {
+    uint32_t id = 0;
+    std::string vendor;
+    std::string name;
+    std::string material;
+    std::string color_hex;
+    double remaining_g = -1;
+    bool archived = false;
+};
+
+enum class ApiError {
+    None, Wifi, Time, Dns, Tls, Timeout, Http, TooLarge, InvalidUrl,
+    Malformed, MissingSpool, ArchivedSpool, Conflict
+};
