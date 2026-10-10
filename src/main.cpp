@@ -1,11 +1,9 @@
 #include <M5Unified.h>
-#include <M5UnitUnified.h>
-#include <M5UnitUnifiedNFC.h>
-#include <wiring/m5_unit_unified_wiring.hpp>
+
+#include "nfc_reader.hpp"
 
 namespace {
-m5::unit::UnitUnified units;
-m5::unit::UnitNFC reader;
+NfcReader reader;
 bool reader_ready = false;
 uint32_t last_heartbeat = 0;
 }  // namespace
@@ -14,10 +12,7 @@ void setup() {
     Serial.begin(115200);
     M5.begin();
 
-    auto config = reader.config();
-    config.mode = m5::nfc::NFC::V;
-    reader.config(config);
-    reader_ready = m5::unit::wiring::addI2C(units, reader, 0, m5::unit::wiring::NessoPort::PortA) && units.begin();
+    reader_ready = reader.begin();
 
     M5.Display.fillScreen(reader_ready ? TFT_DARKGREEN : TFT_RED);
     M5.Display.setTextSize(3);
@@ -28,7 +23,14 @@ void setup() {
 
 void loop() {
     M5.update();
-    units.update();
+    TagRead tag;
+    if (reader.poll(tag)) {
+        Serial.printf("NFC_TAG UID=%s TECH=%c TYPE=%s CAPACITY=%u\n", tag.uid.c_str(),
+                      tag.technology == TagTechnology::A ? 'A' : 'V', tag.type.c_str(), tag.capacity);
+        M5.Display.fillScreen(TFT_DARKGREEN);
+        M5.Display.setCursor(0, 0);
+        M5.Display.printf("Spool Tap\n%s\n%s", tag.type.c_str(), tag.uid.c_str());
+    }
     if (millis() - last_heartbeat >= 2000) {
         Serial.printf("SPOOL_TAP_LOOP NFC_READY=%d\n", reader_ready);
         last_heartbeat = millis();
