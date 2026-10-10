@@ -169,6 +169,20 @@ void test_null_vendor_and_color_are_optional() {
     TEST_ASSERT_TRUE(services.getSpool(7, spool, error));
     TEST_ASSERT_TRUE(spool.vendor.empty());
     TEST_ASSERT_TRUE(spool.color_hex.empty());
+
+    fake.response.body = replaceOnce(spoolFixture, "\"name\":\"buddy3d PLA Black\"", "\"name\":null");
+    TEST_ASSERT_TRUE(services.getSpool(7, spool, error));
+    TEST_ASSERT_TRUE(spool.name.empty());
+    fake.response.body = replaceOnce(spoolFixture, "\"name\":\"buddy3d PLA Black\",", "");
+    TEST_ASSERT_TRUE(services.getSpool(7, spool, error));
+    TEST_ASSERT_TRUE(spool.name.empty());
+
+    fake.response.body = replaceOnce(spoolFixture, "\"material\":\"PLA\"", "\"material\":null");
+    TEST_ASSERT_TRUE(services.getSpool(7, spool, error));
+    TEST_ASSERT_TRUE(spool.material.empty());
+    fake.response.body = replaceOnce(spoolFixture, "\"material\":\"PLA\",", "");
+    TEST_ASSERT_TRUE(services.getSpool(7, spool, error));
+    TEST_ASSERT_TRUE(spool.material.empty());
 }
 
 void test_missing_archived_and_malformed_spool_fail_without_overwriting() {

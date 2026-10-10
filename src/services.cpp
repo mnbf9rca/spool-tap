@@ -68,10 +68,12 @@ bool parseSpool(const std::string& body, uint32_t wanted_id, SpoolInfo& spool) {
     const cJSON* color = cJSON_GetObjectItemCaseSensitive(filament, "color_hex");
     const cJSON* vendor = cJSON_GetObjectItemCaseSensitive(filament, "vendor");
     const cJSON* vendor_name = cJSON_IsObject(vendor) ? cJSON_GetObjectItemCaseSensitive(vendor, "name") : nullptr;
+    const bool name_ok = !name || cJSON_IsString(name) || cJSON_IsNull(name);
+    const bool material_ok = !material || cJSON_IsString(material) || cJSON_IsNull(material);
     const bool color_ok = cJSON_IsString(color) || cJSON_IsNull(color);
     const bool vendor_ok = cJSON_IsNull(vendor) || (cJSON_IsObject(vendor) && cJSON_IsString(vendor_name));
-    if (!cJSON_IsObject(filament) || !cJSON_IsBool(archived) || !cJSON_IsString(name) ||
-        !cJSON_IsString(material) || !color_ok || !vendor_ok ||
+    if (!cJSON_IsObject(filament) || !cJSON_IsBool(archived) || !name_ok ||
+        !material_ok || !color_ok || !vendor_ok ||
         !unsignedId(id, spool.id) || spool.id != wanted_id) return false;
     if (weight && !cJSON_IsNull(weight)) {
         if (!cJSON_IsNumber(weight) || !std::isfinite(weight->valuedouble) || weight->valuedouble < 0)
@@ -80,8 +82,8 @@ bool parseSpool(const std::string& body, uint32_t wanted_id, SpoolInfo& spool) {
     }
     spool.archived = cJSON_IsTrue(archived);
     spool.vendor = cJSON_IsString(vendor_name) ? vendor_name->valuestring : "";
-    spool.name = name->valuestring;
-    spool.material = material->valuestring;
+    spool.name = cJSON_IsString(name) ? name->valuestring : "";
+    spool.material = cJSON_IsString(material) ? material->valuestring : "";
     spool.color_hex = cJSON_IsString(color) ? color->valuestring : "";
     return true;
 }
