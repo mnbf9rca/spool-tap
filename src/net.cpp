@@ -166,6 +166,7 @@ const char* apiErrorLabel(ApiError error) {
     case ApiError::MissingSpool: return "Spool not found";
     case ApiError::ArchivedSpool: return "Spool archived";
     case ApiError::Conflict: return "Spool already in use";
+    case ApiError::InvalidTag: return "Tag UID unreadable";
     }
     return "HTTP request failed";
 }

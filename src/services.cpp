@@ -56,13 +56,12 @@ bool parseMapping(const std::string& body, const SettingsInput& settings, Mappin
     return true;
 }
 
-bool parseSpool(const std::string& body, uint32_t wanted_id, SpoolInfo& spool) {
-    Json root = parseJson(body);
-    if (!root || !cJSON_IsObject(root.get())) return false;
-    const cJSON* filament = cJSON_GetObjectItemCaseSensitive(root.get(), "filament");
-    const cJSON* archived = cJSON_GetObjectItemCaseSensitive(root.get(), "archived");
-    const cJSON* weight = cJSON_GetObjectItemCaseSensitive(root.get(), "remaining_weight");
-    const cJSON* id = cJSON_GetObjectItemCaseSensitive(root.get(), "id");
+bool parseSpool(const cJSON* root, uint32_t wanted_id, SpoolInfo& spool) {
+    if (!cJSON_IsObject(root)) return false;
+    const cJSON* filament = cJSON_GetObjectItemCaseSensitive(root, "filament");
+    const cJSON* archived = cJSON_GetObjectItemCaseSensitive(root, "archived");
+    const cJSON* weight = cJSON_GetObjectItemCaseSensitive(root, "remaining_weight");
+    const cJSON* id = cJSON_GetObjectItemCaseSensitive(root, "id");
     const cJSON* name = cJSON_GetObjectItemCaseSensitive(filament, "name");
     const cJSON* material = cJSON_GetObjectItemCaseSensitive(filament, "material");
     const cJSON* color = cJSON_GetObjectItemCaseSensitive(filament, "color_hex");
@@ -86,6 +85,11 @@ bool parseSpool(const std::string& body, uint32_t wanted_id, SpoolInfo& spool) {
     spool.material = cJSON_IsString(material) ? material->valuestring : "";
     spool.color_hex = cJSON_IsString(color) ? color->valuestring : "";
     return true;
+}
+
+bool parseSpool(const std::string& body, uint32_t wanted_id, SpoolInfo& spool) {
+    Json root = parseJson(body);
+    return parseSpool(root.get(), wanted_id, spool);
 }
 } // namespace
 
@@ -117,6 +121,66 @@ bool Services::getSpool(uint32_t id, SpoolInfo& out, ApiError& error) {
         return false;
     }
     if (candidate.archived) { error = ApiError::ArchivedSpool; return false; }
+    out = std::move(candidate);
+    error = ApiError::None;
+    return true;
+}
+
+bool Services::scan(const TagRead& tag, ScanMatch& out, ApiError& error) {
+    std::string uid = tag.uid;
+    if (uid.empty() || uid.size() > 64 || uid.size() % 2) { error = ApiError::InvalidTag; return false; }
+    for (char& ch : uid) {
+        if (ch >= 'a' && ch <= 'f') ch -= 'a' - 'A';
+        if (!((ch >= '0' && ch <= '9') || (ch >= 'A' && ch <= 'F'))) {
+            error = ApiError::InvalidTag;
+            return false;
+        }
+    }
+
+    Json request(cJSON_CreateObject(), cJSON_Delete);
+    const std::string name = settings_.current().printer_name + " spool tap";
+    const std::string& format = tag.format.empty() ? tag.type : tag.format;
+    if (!request || !cJSON_AddStringToObject(request.get(), "uid", uid.c_str()) ||
+        !cJSON_AddStringToObject(request.get(), "reader_id", settings_.current().reader_id.c_str()) ||
+        !cJSON_AddStringToObject(request.get(), "name", name.c_str()) ||
+        !cJSON_AddStringToObject(request.get(), "format", format.c_str())) {
+        error = ApiError::Http;
+        return false;
+    }
+    std::unique_ptr<char, decltype(&cJSON_free)> encoded(cJSON_PrintUnformatted(request.get()), cJSON_free);
+    if (!encoded) { error = ApiError::Http; return false; }
+    HttpResponse response;
+    const std::string url = settings_.current().spoolman_url + "/api/v1/tag/scan";
+    if (!transport_.request("POST", url.c_str(), encoded.get(), response, error)) return false;
+    if (response.status == 400) { error = ApiError::InvalidTag; return false; }
+    if (response.status != 200) { error = ApiError::Http; return false; }
+
+    Json root = parseJson(response.body);
+    const cJSON* echoed_uid = cJSON_GetObjectItemCaseSensitive(root.get(), "uid");
+    const cJSON* reader_id = cJSON_GetObjectItemCaseSensitive(root.get(), "reader_id");
+    const cJSON* spool_id = cJSON_GetObjectItemCaseSensitive(root.get(), "matched_spool_id");
+    const cJSON* filament_id = cJSON_GetObjectItemCaseSensitive(root.get(), "matched_filament_id");
+    const cJSON* spool_data = cJSON_GetObjectItemCaseSensitive(root.get(), "spool");
+    const cJSON* filament_data = cJSON_GetObjectItemCaseSensitive(root.get(), "filament");
+    ScanMatch candidate;
+    bool valid = cJSON_IsObject(root.get()) && cJSON_IsString(echoed_uid) &&
+                 uid == echoed_uid->valuestring && cJSON_IsString(reader_id) &&
+                 settings_.current().reader_id == reader_id->valuestring &&
+                 (cJSON_IsNull(spool_id) || cJSON_IsNumber(spool_id)) &&
+                 (cJSON_IsNull(filament_id) || cJSON_IsNumber(filament_id)) &&
+                 !(cJSON_IsNumber(spool_id) && cJSON_IsNumber(filament_id)) &&
+                 (cJSON_IsNumber(spool_id) || !spool_data || cJSON_IsNull(spool_data)) &&
+                 (cJSON_IsNumber(filament_id) || !filament_data || cJSON_IsNull(filament_data));
+    if (valid && cJSON_IsNumber(spool_id)) {
+        valid = unsignedId(spool_id, candidate.spool_id) && candidate.spool_id > 0 &&
+                parseSpool(spool_data, candidate.spool_id, candidate.spool);
+        if (valid && candidate.spool.archived) { error = ApiError::ArchivedSpool; return false; }
+        candidate.kind = ScanKind::Spool;
+    } else if (valid && cJSON_IsNumber(filament_id)) {
+        valid = unsignedId(filament_id, candidate.filament_id) && candidate.filament_id > 0;
+        candidate.kind = ScanKind::FilamentOnly;
+    }
+    if (!valid) { error = ApiError::Malformed; return false; }
     out = std::move(candidate);
     error = ApiError::None;
     return true;

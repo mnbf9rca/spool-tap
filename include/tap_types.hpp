@@ -12,6 +12,7 @@ struct TagRead {
     std::string uid;
     TagTechnology technology = TagTechnology::A;
     std::string type;
+    std::string format;
     uint16_t capacity = 0;
     uint8_t block_size = 0;
     std::vector<uint8_t> memory;
@@ -52,7 +53,16 @@ struct SpoolInfo {
     bool archived = false;
 };
 
+enum class ScanKind { Unknown, FilamentOnly, Spool };
+
+struct ScanMatch {
+    ScanKind kind = ScanKind::Unknown;
+    uint32_t spool_id = 0;
+    uint32_t filament_id = 0;
+    SpoolInfo spool;
+};
+
 enum class ApiError {
     None, Wifi, Time, Dns, Tls, Timeout, Http, TooLarge, InvalidUrl,
-    Malformed, MissingSpool, ArchivedSpool, Conflict
+    Malformed, MissingSpool, ArchivedSpool, Conflict, InvalidTag
 };

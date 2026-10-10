@@ -10,6 +10,7 @@ public:
 
     bool getMapping(Mapping& out, ApiError& error);
     bool getSpool(uint32_t id, SpoolInfo& out, ApiError& error);
+    bool scan(const TagRead& tag, ScanMatch& out, ApiError& error);
 
 private:
     HttpTransport& transport_;

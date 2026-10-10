@@ -81,6 +81,19 @@ void loop() {
             }
 #endif
         }
+        if (decoded) tag.format = hints.format;
+        M5.Display.fillScreen(TFT_DARKGREEN);
+        M5.Display.setCursor(0, 0);
+        M5.Display.setTextSize(2);
+        M5.Display.println("Checking tag...");
+        ScanMatch match;
+        ApiError scan_error;
+        if (services.scan(tag, match, scan_error)) {
+            Serial.printf("SCAN_MATCH KIND=%d SPOOL_ID=%u FILAMENT_ID=%u\n",
+                          static_cast<int>(match.kind), match.spool_id, match.filament_id);
+        } else {
+            Serial.printf("SCAN_ERROR %s\n", apiErrorLabel(scan_error));
+        }
         M5.Display.fillScreen(TFT_DARKGREEN);
         M5.Display.setCursor(0, 0);
         M5.Display.setTextSize(2);
