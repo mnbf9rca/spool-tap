@@ -5,8 +5,11 @@ Tap a filament spool's tag to register it as the loaded spool in FilaBridge, wit
 
 ## Working rules
 
-Multi-agent work uses the three-seat arrangement defined in `/Users/rob/git/kubernetes_config/docs/operations/agent-teams.md`.
+Multi-agent work uses the three-seat arrangement in `docs/agent-teams.md`: chief of staff, builder (Codex, `implementer`) and reviewer (Claude, `k8s-reviewer`).
 Read it before dispatching any agent.
-Specs and plans live under `.superpowers/sdd/<plan>/`, which is gitignored.
+A design review includes a seat whose only brief is deletion: name machinery that exists to feel rigorous, and what deleting it would lose.
+Specs, plans and handover files live under `.superpowers/sdd/<plan>/`, which is gitignored; handovers are absolute file paths, never pasted output.
 Markdown is not hard-wrapped: one sentence per line.
-Never commit a secret value; the FilaBridge and Spoolman hosts are LAN-only identifiers and may be committed.
+Anything that asks the operator to act is one instruction per sentence, at most 20 words, imperative.
+Never commit a secret value. The FilaBridge and Spoolman hostnames are LAN-only identifiers and may be committed.
+Nothing is published in the operator's name (GitHub push, upstream issue or PR) without explicit approval.
