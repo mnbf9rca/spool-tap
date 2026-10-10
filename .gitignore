@@ -1,3 +1,5 @@
 .superpowers/
 .pio/
 .vscode/
+.pio-local/
+.claude/worktrees/
