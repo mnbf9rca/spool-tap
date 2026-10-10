@@ -13,6 +13,7 @@ struct TagRead {
     TagTechnology technology = TagTechnology::A;
     std::string type;
     std::string format;
+    bool ndef_malformed = false;
     uint16_t capacity = 0;
     uint8_t block_size = 0;
     std::vector<uint8_t> memory;

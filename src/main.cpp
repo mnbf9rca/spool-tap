@@ -1,4 +1,5 @@
 #include <M5Unified.h>
+#include <WiFi.h>
 
 #include "nfc_reader.hpp"
 #include "tag_ndef.hpp"
@@ -6,6 +7,7 @@
 #include "net.hpp"
 #include "services.hpp"
 #include "settings.hpp"
+#include "ui.hpp"
 
 namespace {
 NfcReader reader;
@@ -13,9 +15,11 @@ Net net;
 Settings settings;
 NvsSettingsStore settings_store;
 Services services(net, settings);
+Ui ui;
 Mapping current_mapping;
 SpoolInfo current_spool;
 bool reader_ready = false;
+bool bridge_ready = false;
 uint32_t last_heartbeat = 0;
 uint32_t last_net_status = 0;
 enum class BootRead { Mapping, Spool, Done };
@@ -31,36 +35,71 @@ void setup() {
         Serial.println("SETTINGS_FAULT using defaults");
     net.begin();
 
-    M5.Display.fillScreen(reader_ready ? TFT_DARKGREEN : TFT_RED);
-    M5.Display.setTextSize(3);
-    M5.Display.setCursor(0, 0);
-    M5.Display.printf("Spool Tap\nNFC %s\n", reader_ready ? "ready" : "error");
+    ui.setPrinterName(settings.current().printer_name);
+    ui.setConnections(false, reader_ready, false);
+    ui.showWorking();
+    ui.render();
     Serial.printf("SPOOL_TAP_BOOT NFC_READY=%d\n", reader_ready);
     Serial.println("NET_WAIT Wi-Fi and clock");
 }
 
 void loop() {
     M5.update();
+    ui.setConnections(WiFi.status() == WL_CONNECTED, reader_ready, bridge_ready);
+    const UiAction action = ui.pollAction();
+    if (action == UiAction::Status) {
+        ui.showStatus(WiFi.localIP().toString().c_str(), "v1");
+        ui.render();
+    } else if (action == UiAction::Back || action == UiAction::Cancel) {
+        if (boot_read == BootRead::Done)
+            ui.showHome(current_mapping, current_spool.id == current_mapping.spool_id ? &current_spool : nullptr);
+        else ui.showWorking();
+        ui.render();
+    }
     if (boot_read != BootRead::Done && millis() - last_net_status >= 2000) {
         ApiError error;
         if (net.ready(error)) {
             if (boot_read == BootRead::Mapping) {
                 if (services.getMapping(current_mapping, error)) {
+                    bridge_ready = true;
                     Serial.printf("BRIDGE_MAPPING SPOOL_ID=%u\n", current_mapping.spool_id);
                     boot_read = current_mapping.spool_id ? BootRead::Spool : BootRead::Done;
-                } else Serial.printf("BRIDGE_ERROR %s\n", apiErrorLabel(error));
+                    if (boot_read == BootRead::Done) {
+                        ui.setConnections(true, reader_ready, bridge_ready);
+                        ui.showHome(current_mapping, nullptr);
+                        ui.render();
+                    } else {
+                        ui.setConnections(true, reader_ready, bridge_ready);
+                        ui.showWorking();
+                        ui.render();
+                    }
+                } else {
+                    bridge_ready = false;
+                    Serial.printf("BRIDGE_ERROR %s\n", apiErrorLabel(error));
+                    ui.showError(error);
+                    ui.render();
+                }
             } else if (services.getSpool(current_mapping.spool_id, current_spool, error)) {
                 Serial.printf("SPOOLMAN_SPOOL ID=%u REMAINING_G=%.2f\n",
                               current_spool.id, current_spool.remaining_g);
                 boot_read = BootRead::Done;
-            } else Serial.printf("SPOOLMAN_ERROR %s\n", apiErrorLabel(error));
+                ui.setConnections(true, reader_ready, bridge_ready);
+                ui.showHome(current_mapping, &current_spool);
+                ui.render();
+            } else {
+                Serial.printf("SPOOLMAN_ERROR %s\n", apiErrorLabel(error));
+                ui.showError(error);
+                ui.render();
+            }
         } else {
             Serial.printf("NET_WAIT %s\n", apiErrorLabel(error));
+            ui.showError(error);
+            ui.render();
         }
         last_net_status = millis();
     }
     TagRead tag;
-    if (reader.poll(tag)) {
+    if (reader.poll(tag) && ui.view().screen == UiScreen::Home) {
         Serial.printf("NFC_TAG UID=%s TECH=%c TYPE=%s CAPACITY=%u\n", tag.uid.c_str(),
                       tag.technology == TagTechnology::A ? 'A' : 'V', tag.type.c_str(), tag.capacity);
         TagHints hints;
@@ -82,32 +121,20 @@ void loop() {
 #endif
         }
         if (decoded) tag.format = hints.format;
-        M5.Display.fillScreen(TFT_DARKGREEN);
-        M5.Display.setCursor(0, 0);
-        M5.Display.setTextSize(2);
-        M5.Display.println("Checking tag...");
+        tag.ndef_malformed = unreadable;
+        ui.showWorking();
+        ui.render();
         ScanMatch match;
         ApiError scan_error;
         if (services.scan(tag, match, scan_error)) {
             Serial.printf("SCAN_MATCH KIND=%d SPOOL_ID=%u FILAMENT_ID=%u\n",
                           static_cast<int>(match.kind), match.spool_id, match.filament_id);
+            ui.showTag(tag, hints, match, current_spool.id == current_mapping.spool_id ? &current_spool : nullptr);
         } else {
             Serial.printf("SCAN_ERROR %s\n", apiErrorLabel(scan_error));
+            ui.showError(scan_error);
         }
-        M5.Display.fillScreen(TFT_DARKGREEN);
-        M5.Display.setCursor(0, 0);
-        M5.Display.setTextSize(2);
-        M5.Display.printf("Spool Tap\n%s\n%s\n", tag.type.c_str(), tag.uid.c_str());
-        if (decoded) {
-            M5.Display.printf("%s\n%s %s\n%s\n", hints.brand.c_str(),
-                              hints.material_type.c_str(), hints.material.c_str(), hints.color_hex.c_str());
-            if (!hints.identifier.empty()) M5.Display.printf("%s\n", hints.identifier.c_str());
-            if (hints.nominal_weight_g > 0) M5.Display.printf("Nominal %.0fg\n", hints.nominal_weight_g);
-            if (!hints.min_temp_c.empty() || !hints.max_temp_c.empty())
-                M5.Display.printf("%s-%sC\n", hints.min_temp_c.c_str(), hints.max_temp_c.c_str());
-        } else if (unreadable) {
-            M5.Display.println("Tag data unreadable");
-        }
+        ui.render();
     }
     if (millis() - last_heartbeat >= 2000) {
         Serial.printf("SPOOL_TAP_LOOP NFC_READY=%d\n", reader_ready);
