@@ -12,8 +12,8 @@ constexpr char kRealm[] = "Spool Tap";
 }
 
 void Web::begin() {
-    const char* headers[] = {"Origin"};
-    server_.collectHeaders(headers, 1);
+    const char* headers[] = {"Origin", "Content-Type"};
+    server_.collectHeaders(headers, 2);
     server_.on("/logs", HTTP_GET, [this] { showLogs(); });
     server_.on("/settings", HTTP_GET, [this] { showSettings(); });
     server_.on("/settings", HTTP_POST, [this] { saveSettings(); });
@@ -26,6 +26,11 @@ void Web::begin() {
 void Web::tick(bool allow_settings_changes) {
     allow_settings_changes_ = allow_settings_changes;
     if (started_) server_.handleClient();
+    if (ota_.staged()) {
+        ota_.handleUpload(UploadStage::Abort);
+        reportUpdateFailure();
+        upload_allowed_ = false;
+    }
     allow_settings_changes_ = true;
 }
 
@@ -68,6 +73,8 @@ void Web::showUpdate() {
 }
 
 void Web::uploadUpdate() {
+    // WebServer also calls this callback for raw POSTs, including Digest probes.
+    if (!server_.header("Content-Type").startsWith("multipart/")) return;
     HTTPUpload& upload = server_.upload();
     if (upload.status == UPLOAD_FILE_START) {
         upload_failure_reported_ = false;

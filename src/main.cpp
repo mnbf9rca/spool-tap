@@ -1,5 +1,6 @@
 #include <M5Unified.h>
 #include <WiFi.h>
+#include <esp_ota_ops.h>
 
 #include "app.hpp"
 #include "nfc_reader.hpp"
@@ -148,10 +149,24 @@ void setup() {
     ui.render();
     Serial.printf("SPOOL_TAP_BOOT NFC_READY=%d\n", reader_ready);
     Serial.printf("SPOOL_TAP_VERSION=%s\n", SPOOL_TAP_VERSION);
+    const esp_partition_t* running = esp_ota_get_running_partition();
+    esp_ota_img_states_t state;
+    const esp_err_t state_error = running ? esp_ota_get_state_partition(running, &state)
+                                          : ESP_ERR_NOT_FOUND;
+    Serial.printf("SPOOL_TAP_OTA SLOT=%s PENDING_VERIFY=%d STATE_ERR=%d\n",
+                  running ? running->label : "none",
+                  state_error == ESP_OK && state == ESP_OTA_IMG_PENDING_VERIFY,
+                  state_error);
     Serial.println("NET_WAIT Wi-Fi and clock");
 }
 
 void loop() {
+#ifdef SPOOL_TAP_ROLLBACK_PROBE
+    Serial.println("SPOOL_TAP_ROLLBACK_PROBE restarting before validation");
+    Serial.flush();
+    delay(500);
+    ESP.restart();
+#endif
     M5.update();
     web.tick();
     updateConnections();
