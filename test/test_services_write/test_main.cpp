@@ -43,6 +43,10 @@ public:
     }
 };
 
+FakeTransport* pump_transport = nullptr;
+size_t pump_after_calls = 0;
+void recordPump() { pump_after_calls = pump_transport->calls.size(); }
+
 class MemoryStore : public Settings::Store {
 public:
     ReadResult read(std::vector<uint8_t>&) override { return ReadResult::Missing; }
@@ -213,6 +217,22 @@ void test_successful_post_with_wrong_readback_is_not_confirmed() {
     TEST_ASSERT_EQUAL_UINT32(7, after.spool_id);
     TEST_ASSERT_EQUAL_INT(static_cast<int>(ApiError::Malformed), static_cast<int>(error));
 }
+
+void test_web_pump_runs_between_post_and_readback() {
+    FakeTransport fake;
+    fake.steps = {{true, 200, mapFixture}, {true, 200, statusWithSpool(9)}};
+    Settings settings;
+    configure(settings);
+    Services services(fake, settings);
+    pump_transport = &fake;
+    pump_after_calls = 0;
+    services.setBetweenRequests(recordPump);
+    Mapping after;
+    ApiError error;
+    TEST_ASSERT_TRUE(services.mapToolhead(9, after, error));
+    TEST_ASSERT_EQUAL_UINT32(1, pump_after_calls);
+    pump_transport = nullptr;
+}
 } // namespace
 
 void setup() {
@@ -226,6 +246,7 @@ void setup() {
     RUN_TEST(test_timed_out_post_with_unchanged_or_failed_get_stays_uncertain);
     RUN_TEST(test_malformed_post_or_status_does_not_claim_success);
     RUN_TEST(test_successful_post_with_wrong_readback_is_not_confirmed);
+    RUN_TEST(test_web_pump_runs_between_post_and_readback);
     UNITY_END();
 }
 

@@ -1,11 +1,14 @@
 #include "app.hpp"
 
+#include "logs.hpp"
+
 bool App::showMapping(const Mapping& observed, uint32_t now) {
     Ui& ui = ui_.ui();
     SpoolInfo details;
     if (observed.spool_id) {
         ApiError error = ApiError::None;
         if (!services_.getSpool(observed.spool_id, details, error)) {
+            if (logs_ && !mapping_.stale) logs_->add(LogLevel::Warning, LogEvent::SpoolFailed);
             const bool same_spool = current_spool_.id == observed.spool_id;
             mapping_ = observed;
             mapping_.stale = true;
@@ -19,6 +22,7 @@ bool App::showMapping(const Mapping& observed, uint32_t now) {
         }
     }
     mapping_ = observed;
+    if (logs_) logs_->add(LogLevel::Info, LogEvent::MappingReady);
     mapping_.stale = false;
     current_spool_ = details;
     have_home_ = true;
@@ -36,6 +40,7 @@ bool App::refreshHome(uint32_t now) {
     Mapping observed;
     ApiError error = ApiError::None;
     if (!services_.getMapping(observed, error)) {
+        if (logs_ && bridge_ready_) logs_->add(LogLevel::Warning, LogEvent::MappingFailed);
         bridge_ready_ = false;
         refresh_pending_ = true;
         if (have_home_) {
@@ -57,6 +62,7 @@ void App::confirm(UiAction operation, uint32_t now) {
     Mapping fresh;
     ApiError error = ApiError::None;
     if (!services_.getMapping(fresh, error)) {
+        if (logs_) logs_->add(LogLevel::Warning, LogEvent::MappingFailed);
         bridge_ready_ = false;
         mapping_.stale = true;
         refresh_pending_ = true;
@@ -80,18 +86,22 @@ void App::confirm(UiAction operation, uint32_t now) {
     Mapping after = mapping_;
     const bool mapped = services_.mapToolhead(target, after, error);
     if (!mapped) {
+        if (logs_) logs_->add(LogLevel::Error, LogEvent::MappingWriteFailed);
         refreshHome(now);
         ui.showError(error);
         ui.render();
         return;
     }
     if (!showMapping(after, now)) return;
+    if (logs_) logs_->add(LogLevel::Info, operation == UiAction::Load ?
+                         LogEvent::LoadConfirmed : LogEvent::UnloadConfirmed);
     ui.showSuccess(operation == UiAction::Load,
                    operation == UiAction::Load ? current_spool_ : previous_spool);
     ui.render();
 }
 
 void App::settingsChanged() {
+    if (logs_) logs_->add(LogLevel::Info, LogEvent::SettingsChanged);
     candidate_ = {};
     candidate_tag_ = {};
     candidate_hints_ = {};
@@ -161,8 +171,10 @@ void App::tick() {
     ScanMatch match;
     ApiError error = ApiError::None;
     if (!services_.scan(tag, match, error)) {
+        if (logs_) logs_->add(LogLevel::Warning, LogEvent::ScanFailed);
         ui.showError(error);
     } else {
+        if (logs_) logs_->add(LogLevel::Info, LogEvent::TagScanned);
         candidate_tag_ = tag;
         candidate_hints_ = hints;
         candidate_ = match;

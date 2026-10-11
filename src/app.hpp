@@ -2,10 +2,13 @@
 
 #include "tap_ports.hpp"
 
+class Logs;
+
 class App {
 public:
-    App(ReaderPort& reader, ServicesPort& services, UiPort& ui, ClockPort& clock)
-        : reader_(reader), services_(services), ui_(ui), clock_(clock) {}
+    App(ReaderPort& reader, ServicesPort& services, UiPort& ui, ClockPort& clock,
+        Logs* logs = nullptr)
+        : reader_(reader), services_(services), ui_(ui), clock_(clock), logs_(logs) {}
 
     void tick();
     void settingsChanged();
@@ -20,6 +23,7 @@ private:
     ServicesPort& services_;
     UiPort& ui_;
     ClockPort& clock_;
+    Logs* logs_;
     Mapping mapping_;
     SpoolInfo current_spool_;
     TagRead candidate_tag_;

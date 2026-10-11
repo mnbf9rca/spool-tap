@@ -9,6 +9,8 @@
 #include "services.hpp"
 #include "settings.hpp"
 #include "ui.hpp"
+#include "logs.hpp"
+#include "web.hpp"
 
 namespace {
 NfcReader reader;
@@ -17,8 +19,12 @@ Settings settings;
 NvsSettingsStore settings_store;
 Services services(net, settings);
 Ui ui;
+Logs logs;
+Web web(logs);
 bool reader_ready = false;
 uint32_t last_heartbeat = 0;
+
+void pumpWeb() { web.tick(); }
 
 class DeviceReader : public ReaderPort {
 public:
@@ -53,18 +59,21 @@ public:
     explicit DeviceServices(Services& services) : services_(services) {}
     bool getMapping(Mapping& out, ApiError& error) override {
         const bool ok = services_.getMapping(out, error);
+        web.tick();
         if (ok) Serial.printf("BRIDGE_MAPPING SPOOL_ID=%u\n", out.spool_id);
         else Serial.printf("BRIDGE_ERROR %s\n", apiErrorLabel(error));
         return ok;
     }
     bool getSpool(uint32_t id, SpoolInfo& out, ApiError& error) override {
         const bool ok = services_.getSpool(id, out, error);
+        web.tick();
         if (ok) Serial.printf("SPOOLMAN_SPOOL ID=%u REMAINING_G=%.2f\n", out.id, out.remaining_g);
         else Serial.printf("SPOOLMAN_ERROR %s\n", apiErrorLabel(error));
         return ok;
     }
     bool scan(const TagRead& tag, ScanMatch& out, ApiError& error) override {
         const bool ok = services_.scan(tag, out, error);
+        web.tick();
         if (ok) Serial.printf("SCAN_MATCH KIND=%d SPOOL_ID=%u FILAMENT_ID=%u\n",
                               static_cast<int>(out.kind), out.spool_id, out.filament_id);
         else Serial.printf("SCAN_ERROR %s\n", apiErrorLabel(error));
@@ -72,6 +81,7 @@ public:
     }
     bool mapToolhead(uint32_t id, Mapping& after, ApiError& error) override {
         const bool ok = services_.mapToolhead(id, after, error);
+        web.tick();
         Serial.printf("BRIDGE_MAP TARGET=%u RESULT=%s\n", id, ok ? "confirmed" : apiErrorLabel(error));
         return ok;
     }
@@ -98,10 +108,13 @@ DeviceReader app_reader(reader);
 DeviceServices app_services(services);
 DeviceUi app_ui(ui);
 DeviceClock app_clock;
-App app(app_reader, app_services, app_ui, app_clock);
+App app(app_reader, app_services, app_ui, app_clock, &logs);
 
 void updateConnections() {
     const bool wifi = WiFi.status() == WL_CONNECTED;
+    if (ui.view().wifi != wifi)
+        logs.add(wifi ? LogLevel::Info : LogLevel::Warning,
+                 wifi ? LogEvent::WifiConnected : LogEvent::WifiLost);
     const bool bridge = wifi && app.bridgeReady() && !ui.view().stale;
     if (ui.view().wifi == wifi && ui.view().nfc == reader_ready &&
         ui.view().bridge == bridge) return;
@@ -113,10 +126,17 @@ void updateConnections() {
 void setup() {
     Serial.begin(115200);
     M5.begin();
+    logs.add(LogLevel::Info, LogEvent::Boot);
     reader_ready = reader.begin();
-    if (!settings_store.begin() || !settings.load(settings_store))
+    logs.add(reader_ready ? LogLevel::Info : LogLevel::Warning,
+             reader_ready ? LogEvent::ReaderReady : LogEvent::ReaderUnavailable);
+    if (!settings_store.begin() || !settings.load(settings_store)) {
         Serial.println("SETTINGS_FAULT using defaults");
+        logs.add(LogLevel::Warning, LogEvent::SettingsFallback);
+    }
     net.begin();
+    web.begin();
+    services.setBetweenRequests(pumpWeb);
     ui.setPrinterName(settings.current().printer_name);
     ui.setConnections(false, reader_ready, false);
     ui.showWorking();
@@ -127,8 +147,10 @@ void setup() {
 
 void loop() {
     M5.update();
+    web.tick();
     updateConnections();
     app.tick();
+    web.tick();
     updateConnections();
     if (millis() - last_heartbeat >= 2000) {
         Serial.printf("SPOOL_TAP_LOOP NFC_READY=%d\n", reader_ready);

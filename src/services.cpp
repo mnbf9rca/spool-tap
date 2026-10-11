@@ -214,6 +214,7 @@ bool Services::mapToolhead(uint32_t spool_id, Mapping& after, ApiError& error) {
         }
     }
 
+    if (between_requests_) between_requests_();
     Mapping observed;
     ApiError read_error = ApiError::None;
     if (!getMapping(observed, read_error)) { error = read_error; return false; }
