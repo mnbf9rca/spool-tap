@@ -201,7 +201,9 @@ void App::tick() {
     TagRead tag;
     TagHints hints;
     const bool presented = reader_.poll(tag, hints);
-    if (!presented || before != UiScreen::Home || action != UiAction::None ||
+    const bool scan_screen = before == UiScreen::Home || before == UiScreen::Tag ||
+                             before == UiScreen::Error || before == UiScreen::Success;
+    if (!presented || !scan_screen || action != UiAction::None ||
         !have_home_ || mapping_.stale) return;
     ui.showWorking("Checking tag");
     ui.render();

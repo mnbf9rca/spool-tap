@@ -347,6 +347,47 @@ void test_back_requires_tag_removal_before_rescan() {
     TEST_ASSERT_EQUAL_INT(2, services.scan_calls);
 }
 
+void test_result_screen_accepts_next_tag_without_back() {
+    FakeReader reader;
+    FakeServices services;
+    FakeUi ui;
+    FakeClock clock;
+    App app(reader, services, ui, clock);
+    app.tick();
+    present(reader, app);
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(UiScreen::Tag), static_cast<int>(ui.display.view().screen));
+    reader.present = false;
+    app.tick();
+    services.scan_result = linked(10);
+    reader.tag.uid = "B2C3";
+    present(reader, app);
+    TEST_ASSERT_EQUAL_INT(2, services.scan_calls);
+    TEST_ASSERT_TRUE(hasLine(ui.display, "Spool 10"));
+
+    reader.present = false;
+    app.tick();
+    services.scan_ok = false;
+    present(reader, app);
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(UiScreen::Error), static_cast<int>(ui.display.view().screen));
+    reader.present = false;
+    app.tick();
+    services.scan_ok = true;
+    services.scan_result = linked(11);
+    present(reader, app);
+    TEST_ASSERT_EQUAL_INT(4, services.scan_calls);
+    TEST_ASSERT_TRUE(hasLine(ui.display, "Spool 11"));
+
+    press(ui, app, UiAction::Load);
+    press(ui, app, UiAction::Confirm);
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(UiScreen::Success), static_cast<int>(ui.display.view().screen));
+    reader.present = false;
+    app.tick();
+    services.scan_result = linked(12);
+    present(reader, app);
+    TEST_ASSERT_EQUAL_INT(5, services.scan_calls);
+    TEST_ASSERT_TRUE(hasLine(ui.display, "Spool 12"));
+}
+
 void test_return_to_home_refreshes_mapping_immediately() {
     FakeReader reader;
     FakeServices services;
@@ -559,6 +600,7 @@ void setup() {
     RUN_TEST(test_changed_mapping_requires_new_load_confirmation);
     RUN_TEST(test_idle_refresh_runs_at_thirty_seconds_only_on_home);
     RUN_TEST(test_back_requires_tag_removal_before_rescan);
+    RUN_TEST(test_result_screen_accepts_next_tag_without_back);
     RUN_TEST(test_return_to_home_refreshes_mapping_immediately);
     RUN_TEST(test_working_screen_ignores_new_scan);
     RUN_TEST(test_failed_refresh_marks_home_stale_and_hides_unload);
