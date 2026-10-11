@@ -1,6 +1,7 @@
 #include <M5Unified.h>
 #include <WiFi.h>
 
+#include "app.hpp"
 #include "nfc_reader.hpp"
 #include "tag_ndef.hpp"
 #include "tag_decode.hpp"
@@ -16,99 +17,21 @@ Settings settings;
 NvsSettingsStore settings_store;
 Services services(net, settings);
 Ui ui;
-Mapping current_mapping;
-SpoolInfo current_spool;
 bool reader_ready = false;
-bool bridge_ready = false;
 uint32_t last_heartbeat = 0;
-uint32_t last_net_status = 0;
-enum class BootRead { Mapping, Spool, Done };
-BootRead boot_read = BootRead::Mapping;
-}  // namespace
 
-void setup() {
-    Serial.begin(115200);
-    M5.begin();
-
-    reader_ready = reader.begin();
-    if (!settings_store.begin() || !settings.load(settings_store))
-        Serial.println("SETTINGS_FAULT using defaults");
-    net.begin();
-
-    ui.setPrinterName(settings.current().printer_name);
-    ui.setConnections(false, reader_ready, false);
-    ui.showWorking();
-    ui.render();
-    Serial.printf("SPOOL_TAP_BOOT NFC_READY=%d\n", reader_ready);
-    Serial.println("NET_WAIT Wi-Fi and clock");
-}
-
-void loop() {
-    M5.update();
-    ui.setConnections(WiFi.status() == WL_CONNECTED, reader_ready, bridge_ready);
-    const UiAction action = ui.pollAction();
-    if (action == UiAction::Status) {
-        ui.showStatus(WiFi.localIP().toString().c_str(), "v1");
-        ui.render();
-    } else if (action == UiAction::Back || action == UiAction::Cancel) {
-        if (boot_read == BootRead::Done)
-            ui.showHome(current_mapping, current_spool.id == current_mapping.spool_id ? &current_spool : nullptr);
-        else ui.showWorking();
-        ui.render();
-    }
-    if (boot_read != BootRead::Done && millis() - last_net_status >= 2000) {
-        ApiError error;
-        if (net.ready(error)) {
-            if (boot_read == BootRead::Mapping) {
-                if (services.getMapping(current_mapping, error)) {
-                    bridge_ready = true;
-                    Serial.printf("BRIDGE_MAPPING SPOOL_ID=%u\n", current_mapping.spool_id);
-                    boot_read = current_mapping.spool_id ? BootRead::Spool : BootRead::Done;
-                    if (boot_read == BootRead::Done) {
-                        ui.setConnections(true, reader_ready, bridge_ready);
-                        ui.showHome(current_mapping, nullptr);
-                        ui.render();
-                    } else {
-                        ui.setConnections(true, reader_ready, bridge_ready);
-                        ui.showWorking();
-                        ui.render();
-                    }
-                } else {
-                    bridge_ready = false;
-                    Serial.printf("BRIDGE_ERROR %s\n", apiErrorLabel(error));
-                    ui.showError(error);
-                    ui.render();
-                }
-            } else if (services.getSpool(current_mapping.spool_id, current_spool, error)) {
-                Serial.printf("SPOOLMAN_SPOOL ID=%u REMAINING_G=%.2f\n",
-                              current_spool.id, current_spool.remaining_g);
-                boot_read = BootRead::Done;
-                ui.setConnections(true, reader_ready, bridge_ready);
-                ui.showHome(current_mapping, &current_spool);
-                ui.render();
-            } else {
-                Serial.printf("SPOOLMAN_ERROR %s\n", apiErrorLabel(error));
-                ui.showError(error);
-                ui.render();
-            }
-        } else {
-            Serial.printf("NET_WAIT %s\n", apiErrorLabel(error));
-            ui.showError(error);
-            ui.render();
-        }
-        last_net_status = millis();
-    }
-    TagRead tag;
-    if (reader.poll(tag) && ui.view().screen == UiScreen::Home) {
+class DeviceReader : public ReaderPort {
+public:
+    explicit DeviceReader(NfcReader& reader) : reader_(reader) {}
+    bool poll(TagRead& tag, TagHints& hints) override {
+        if (!reader_.poll(tag)) return false;
         Serial.printf("NFC_TAG UID=%s TECH=%c TYPE=%s CAPACITY=%u\n", tag.uid.c_str(),
                       tag.technology == TagTechnology::A ? 'A' : 'V', tag.type.c_str(), tag.capacity);
-        TagHints hints;
-        bool decoded = false;
         if (!tag.memory.empty()) {
             std::vector<NdefRecord> records;
             const bool ndef_ok = extractNdef(tag, records);
             Serial.printf("NFC_NDEF_OK=%d RECORDS=%u\n", ndef_ok, records.size());
-            decoded = ndef_ok && decodeTag(records, hints);
+            if (ndef_ok && decodeTag(records, hints)) tag.format = hints.format;
             tag.ndef_malformed = !ndef_ok;
 #if defined(SPOOL_TAP_CAPTURE_NDEF)
             for (const auto& record : records) {
@@ -119,21 +42,94 @@ void loop() {
             }
 #endif
         }
-        if (decoded) tag.format = hints.format;
-        ui.showWorking();
-        ui.render();
-        ScanMatch match;
-        ApiError scan_error;
-        if (services.scan(tag, match, scan_error)) {
-            Serial.printf("SCAN_MATCH KIND=%d SPOOL_ID=%u FILAMENT_ID=%u\n",
-                          static_cast<int>(match.kind), match.spool_id, match.filament_id);
-            ui.showTag(tag, hints, match, current_spool.id == current_mapping.spool_id ? &current_spool : nullptr);
-        } else {
-            Serial.printf("SCAN_ERROR %s\n", apiErrorLabel(scan_error));
-            ui.showError(scan_error);
-        }
-        ui.render();
+        return true;
     }
+private:
+    NfcReader& reader_;
+};
+
+class DeviceServices : public ServicesPort {
+public:
+    explicit DeviceServices(Services& services) : services_(services) {}
+    bool getMapping(Mapping& out, ApiError& error) override {
+        const bool ok = services_.getMapping(out, error);
+        if (ok) Serial.printf("BRIDGE_MAPPING SPOOL_ID=%u\n", out.spool_id);
+        else Serial.printf("BRIDGE_ERROR %s\n", apiErrorLabel(error));
+        return ok;
+    }
+    bool getSpool(uint32_t id, SpoolInfo& out, ApiError& error) override {
+        const bool ok = services_.getSpool(id, out, error);
+        if (ok) Serial.printf("SPOOLMAN_SPOOL ID=%u REMAINING_G=%.2f\n", out.id, out.remaining_g);
+        else Serial.printf("SPOOLMAN_ERROR %s\n", apiErrorLabel(error));
+        return ok;
+    }
+    bool scan(const TagRead& tag, ScanMatch& out, ApiError& error) override {
+        const bool ok = services_.scan(tag, out, error);
+        if (ok) Serial.printf("SCAN_MATCH KIND=%d SPOOL_ID=%u FILAMENT_ID=%u\n",
+                              static_cast<int>(out.kind), out.spool_id, out.filament_id);
+        else Serial.printf("SCAN_ERROR %s\n", apiErrorLabel(error));
+        return ok;
+    }
+    bool mapToolhead(uint32_t id, Mapping& after, ApiError& error) override {
+        const bool ok = services_.mapToolhead(id, after, error);
+        Serial.printf("BRIDGE_MAP TARGET=%u RESULT=%s\n", id, ok ? "confirmed" : apiErrorLabel(error));
+        return ok;
+    }
+private:
+    Services& services_;
+};
+
+class DeviceUi : public UiPort {
+public:
+    explicit DeviceUi(Ui& ui) : ui_(ui) {}
+    UiAction pollAction() override { return ui_.pollAction(); }
+    Ui& ui() override { return ui_; }
+    std::string ipAddress() const override { return WiFi.localIP().toString().c_str(); }
+private:
+    Ui& ui_;
+};
+
+class DeviceClock : public ClockPort {
+public:
+    uint32_t millis() const override { return ::millis(); }
+};
+
+DeviceReader app_reader(reader);
+DeviceServices app_services(services);
+DeviceUi app_ui(ui);
+DeviceClock app_clock;
+App app(app_reader, app_services, app_ui, app_clock);
+
+void updateConnections() {
+    const bool wifi = WiFi.status() == WL_CONNECTED;
+    const bool bridge = wifi && app.bridgeReady() && !ui.view().stale;
+    if (ui.view().wifi == wifi && ui.view().nfc == reader_ready &&
+        ui.view().bridge == bridge) return;
+    ui.setConnections(wifi, reader_ready, wifi && app.bridgeReady());
+    ui.render();
+}
+}  // namespace
+
+void setup() {
+    Serial.begin(115200);
+    M5.begin();
+    reader_ready = reader.begin();
+    if (!settings_store.begin() || !settings.load(settings_store))
+        Serial.println("SETTINGS_FAULT using defaults");
+    net.begin();
+    ui.setPrinterName(settings.current().printer_name);
+    ui.setConnections(false, reader_ready, false);
+    ui.showWorking();
+    ui.render();
+    Serial.printf("SPOOL_TAP_BOOT NFC_READY=%d\n", reader_ready);
+    Serial.println("NET_WAIT Wi-Fi and clock");
+}
+
+void loop() {
+    M5.update();
+    updateConnections();
+    app.tick();
+    updateConnections();
     if (millis() - last_heartbeat >= 2000) {
         Serial.printf("SPOOL_TAP_LOOP NFC_READY=%d\n", reader_ready);
         last_heartbeat = millis();

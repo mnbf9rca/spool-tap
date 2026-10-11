@@ -7,7 +7,7 @@
 #include "tap_types.hpp"
 
 enum class UiAction { None, Load, Unload, Confirm, Cancel, Back, Status };
-enum class UiScreen { Home, Tag, Working, Error, Confirm, Status };
+enum class UiScreen { Home, Tag, Working, Error, Confirm, Status, Success };
 
 struct UiView {
     UiScreen screen = UiScreen::Working;
@@ -32,6 +32,7 @@ public:
     void showWorking();
     void showError(ApiError error);
     void showConfirm(UiAction operation, const SpoolInfo& spool);
+    void showSuccess(bool loading, const SpoolInfo& spool);
     void showStatus(const std::string& ip, const std::string& version);
     std::vector<std::string> visibleLines(size_t slots) const;
     UiAction actionAt(int x, int y) const;

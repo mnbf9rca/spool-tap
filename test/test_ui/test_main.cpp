@@ -90,6 +90,24 @@ void test_empty_or_stale_home_cannot_unload() {
     TEST_ASSERT_EQUAL_INT(static_cast<int>(UiAction::None), static_cast<int>(ui.actionAt(40, 210)));
 }
 
+void test_connection_changes_update_visible_home_status() {
+    Ui ui;
+    Mapping mapping;
+    ui.showHome(mapping, nullptr);
+    ui.setConnections(true, true, true);
+    TEST_ASSERT_TRUE(ui.view().wifi);
+    TEST_ASSERT_TRUE(ui.view().nfc);
+    TEST_ASSERT_TRUE(ui.view().bridge);
+    ui.setConnections(false, true, false);
+    TEST_ASSERT_FALSE(ui.view().wifi);
+    TEST_ASSERT_TRUE(ui.view().nfc);
+    TEST_ASSERT_FALSE(ui.view().bridge);
+    mapping.stale = true;
+    ui.showHome(mapping, nullptr);
+    ui.setConnections(true, true, true);
+    TEST_ASSERT_FALSE(ui.view().bridge);
+}
+
 void test_linked_tag_preview_offers_load_and_cancel() {
     Ui ui;
     TagRead tag;
@@ -302,6 +320,7 @@ void setup() {
     RUN_TEST(test_loaded_home_shows_current_spool_status_and_unload);
     RUN_TEST(test_home_drop_order_and_unknown_remaining);
     RUN_TEST(test_empty_or_stale_home_cannot_unload);
+    RUN_TEST(test_connection_changes_update_visible_home_status);
     RUN_TEST(test_linked_tag_preview_offers_load_and_cancel);
     RUN_TEST(test_unknown_tag_shows_uid_type_hints_and_back_only);
     RUN_TEST(test_filament_only_prompts_for_spool_assignment_without_load);

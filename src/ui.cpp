@@ -144,6 +144,9 @@ void Ui::setConnections(bool wifi, bool nfc, bool bridge) {
     wifi_ = wifi;
     nfc_ = nfc;
     bridge_ = bridge;
+    view_.wifi = wifi;
+    view_.nfc = nfc;
+    view_.bridge = bridge && !view_.stale;
 }
 
 std::string Ui::connectionText(bool bridge) const {
@@ -246,6 +249,13 @@ void Ui::showConfirm(UiAction operation, const SpoolInfo& spool) {
     if (!material.empty()) lines_.push_back({safeText(material), 0});
     view_.left = UiAction::Confirm;
     view_.right = UiAction::Cancel;
+}
+
+void Ui::showSuccess(bool loading, const SpoolInfo& spool) {
+    start(UiScreen::Success, loading ? "Spool loaded" : "Spool unloaded");
+    if (!spool.name.empty()) lines_.push_back({safeText(spool.name), 0});
+    lines_.push_back({"Mapping confirmed", 1});
+    view_.right = UiAction::Back;
 }
 
 void Ui::showStatus(const std::string& ip, const std::string& version) {
