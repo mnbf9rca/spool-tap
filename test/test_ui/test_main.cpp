@@ -54,6 +54,24 @@ void test_loaded_home_shows_current_spool_status_and_unload() {
     TEST_ASSERT_EQUAL_INT(static_cast<int>(UiAction::None), static_cast<int>(ui.actionAt(40, 160)));
 }
 
+void test_home_activity_preserves_content_and_clears_on_next_screen() {
+    Ui ui;
+    ui.setConnections(true, true, true);
+    Mapping mapping;
+    SpoolInfo loaded = spool();
+    mapping.spool_id = loaded.id;
+    ui.showHome(mapping, &loaded);
+    const auto before = ui.visibleLines(5);
+    ui.setHomeActivity("Checking assignment...");
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(UiScreen::Home), static_cast<int>(ui.view().screen));
+    TEST_ASSERT_EQUAL_STRING("Checking assignment...", ui.view().activity.c_str());
+    TEST_ASSERT_EQUAL_STRING("", ui.view().status.c_str());
+    TEST_ASSERT_TRUE(before == ui.visibleLines(5));
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(UiAction::Status), static_cast<int>(ui.actionAt(220, 210)));
+    ui.showHome(mapping, &loaded);
+    TEST_ASSERT_EQUAL_STRING("", ui.view().activity.c_str());
+}
+
 void test_update_screen_reports_progress_and_failure_without_mapping_action() {
     Ui ui;
     ui.showUpdateProgress(131072);
@@ -360,6 +378,7 @@ void setup() {
     UNITY_BEGIN();
     RUN_TEST(test_update_screen_reports_progress_and_failure_without_mapping_action);
     RUN_TEST(test_loaded_home_shows_current_spool_status_and_unload);
+    RUN_TEST(test_home_activity_preserves_content_and_clears_on_next_screen);
     RUN_TEST(test_home_drop_order_and_unknown_remaining);
     RUN_TEST(test_empty_or_stale_home_cannot_unload);
     RUN_TEST(test_connection_changes_update_visible_home_status);

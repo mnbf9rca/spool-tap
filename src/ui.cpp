@@ -10,6 +10,7 @@
 namespace {
 constexpr size_t kCharsPerLine = 18;
 constexpr int kButtonsTop = 184;
+constexpr int kHomeActivityTop = 162;
 
 std::string safeText(const std::string& input) {
     std::string result;
@@ -196,6 +197,10 @@ void Ui::showHome(const Mapping& mapping, const SpoolInfo* spool, ApiError spool
     if (!mapping.stale) view_.left = UiAction::Unload;
 }
 
+void Ui::setHomeActivity(const char* activity) {
+    if (view_.screen == UiScreen::Home) view_.activity = activity;
+}
+
 void Ui::showTag(const TagRead& tag, const TagHints& hints, const ScanMatch& match,
                  const SpoolInfo* current_spool) {
     if (match.kind == ScanKind::Spool && match.spool.archived) {
@@ -370,10 +375,17 @@ void Ui::render() const {
             M5.Display.drawRect(293, 6, 20, 20, TFT_WHITE);
         }
     }
-    const size_t slots = y < kButtonsTop ? static_cast<size_t>((kButtonsTop - y) / 27) : 0;
+    const int contentBottom = view_.screen == UiScreen::Home ? kHomeActivityTop : kButtonsTop;
+    const size_t slots = y < contentBottom ? static_cast<size_t>((contentBottom - y) / 27) : 0;
     for (const auto& line : visibleLines(slots)) {
         M5.Display.drawString(line.c_str(), 4, y);
         y += 27;
+    }
+    if (view_.screen == UiScreen::Home && !view_.activity.empty()) {
+        M5.Display.setFont(&fonts::DejaVu12);
+        M5.Display.setTextColor(TFT_LIGHTGREY, background);
+        M5.Display.drawString(view_.activity.c_str(),
+                              316 - M5.Display.textWidth(view_.activity.c_str()), kHomeActivityTop);
     }
     drawButton(view_.left, 0);
     drawButton(view_.right, 160);

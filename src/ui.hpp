@@ -13,6 +13,7 @@ struct UiView {
     UiScreen screen = UiScreen::Working;
     std::string title;
     std::string status;
+    std::string activity;
     std::string color_hex;
     UiAction left = UiAction::None;
     UiAction right = UiAction::None;
@@ -30,6 +31,7 @@ public:
     void showTag(const TagRead& tag, const TagHints& hints, const ScanMatch& match,
                  const SpoolInfo* current_spool);
     void showWorking(const char* activity);
+    void setHomeActivity(const char* activity);
     void showError(ApiError error, const char* failed_operation = nullptr);
     void showConfirm(UiAction operation, const SpoolInfo& spool);
     void showSuccess(bool loading, const SpoolInfo& spool);

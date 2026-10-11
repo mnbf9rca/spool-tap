@@ -53,7 +53,11 @@ class FakeServices : public ServicesPort {
 public:
     Ui* observed_ui = nullptr;
     std::string mapping_title;
+    std::string mapping_activity;
+    UiScreen mapping_screen = UiScreen::Working;
     std::string spool_title;
+    std::string spool_activity;
+    UiScreen spool_screen = UiScreen::Working;
     std::string scan_title;
     std::string map_title;
     uint32_t server_spool = 0;
@@ -72,7 +76,11 @@ public:
     uint32_t mapped_id = 99;
 
     bool getMapping(Mapping& out, ApiError& error) override {
-        if (observed_ui) mapping_title = observed_ui->view().title;
+        if (observed_ui) {
+            mapping_title = observed_ui->view().title;
+            mapping_activity = observed_ui->view().activity;
+            mapping_screen = observed_ui->view().screen;
+        }
         ++mapping_calls;
         if (!mapping_ok) { error = mapping_error; return false; }
         out.spool_id = server_spool;
@@ -81,7 +89,11 @@ public:
         return true;
     }
     bool getSpool(uint32_t id, SpoolInfo& out, ApiError& error) override {
-        if (observed_ui) spool_title = observed_ui->view().title;
+        if (observed_ui) {
+            spool_title = observed_ui->view().title;
+            spool_activity = observed_ui->view().activity;
+            spool_screen = observed_ui->view().screen;
+        }
         ++spool_calls;
         if (!spool_ok) { error = ApiError::MissingSpool; return false; }
         out = spool(id);
@@ -206,8 +218,8 @@ void test_working_title_names_the_active_service_operation() {
     FakeClock clock;
     App app(reader, services, ui, clock);
     app.tick();
-    TEST_ASSERT_EQUAL_STRING("Checking printer", services.mapping_title.c_str());
-    TEST_ASSERT_EQUAL_STRING("Reading spool", services.spool_title.c_str());
+    TEST_ASSERT_EQUAL_STRING("Checking assignment...", services.mapping_title.c_str());
+    TEST_ASSERT_EQUAL_STRING("Getting spool details...", services.spool_title.c_str());
     present(reader, app);
     TEST_ASSERT_EQUAL_STRING("Checking tag", services.scan_title.c_str());
     press(ui, app, UiAction::Load);
@@ -217,6 +229,26 @@ void test_working_title_names_the_active_service_operation() {
     press(ui, app, UiAction::Unload);
     press(ui, app, UiAction::Confirm);
     TEST_ASSERT_EQUAL_STRING("Unloading spool", services.map_title.c_str());
+}
+
+void test_periodic_refresh_keeps_home_visible_with_small_activity() {
+    FakeReader reader;
+    FakeServices services;
+    services.server_spool = 7;
+    FakeUi ui;
+    services.observed_ui = &ui.display;
+    FakeClock clock;
+    App app(reader, services, ui, clock);
+    app.tick();
+    clock.now = 30000;
+    app.tick();
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(UiScreen::Home), static_cast<int>(services.mapping_screen));
+    TEST_ASSERT_EQUAL_STRING("", services.mapping_title.c_str());
+    TEST_ASSERT_EQUAL_STRING("Checking assignment...", services.mapping_activity.c_str());
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(UiScreen::Home), static_cast<int>(services.spool_screen));
+    TEST_ASSERT_EQUAL_STRING("Getting spool details...", services.spool_activity.c_str());
+    TEST_ASSERT_EQUAL_STRING("", ui.display.view().activity.c_str());
+    TEST_ASSERT_TRUE(hasLine(ui.display, "Spool 7"));
 }
 
 void test_unload_names_current_spool_and_maps_zero_only_after_confirmation() {
@@ -337,7 +369,7 @@ void test_working_screen_ignores_new_scan() {
     FakeClock clock;
     App app(reader, services, ui, clock);
     app.tick();
-    ui.display.showWorking("Checking printer");
+    ui.display.showWorking("Checking assignment...");
     present(reader, app);
     TEST_ASSERT_EQUAL_INT(0, services.scan_calls);
     TEST_ASSERT_EQUAL_INT(0, services.map_calls);
@@ -521,6 +553,7 @@ void setup() {
     UNITY_BEGIN();
     RUN_TEST(test_scan_requires_load_and_confirmation_before_mapping);
     RUN_TEST(test_working_title_names_the_active_service_operation);
+    RUN_TEST(test_periodic_refresh_keeps_home_visible_with_small_activity);
     RUN_TEST(test_unload_names_current_spool_and_maps_zero_only_after_confirmation);
     RUN_TEST(test_cancel_never_posts_for_load_or_unload);
     RUN_TEST(test_changed_mapping_requires_new_load_confirmation);

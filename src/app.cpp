@@ -11,7 +11,8 @@ bool App::showMapping(const Mapping& observed, uint32_t now) {
     Ui& ui = ui_.ui();
     SpoolInfo details;
     if (observed.spool_id) {
-        ui.showWorking("Reading spool");
+        if (ui.view().screen == UiScreen::Home) ui.setHomeActivity("Getting spool details...");
+        else ui.showWorking("Getting spool details...");
         ui.render();
         ApiError error = ApiError::None;
         if (!services_.getSpool(observed.spool_id, details, error)) {
@@ -42,7 +43,8 @@ bool App::showMapping(const Mapping& observed, uint32_t now) {
 
 bool App::refreshHome(uint32_t now) {
     Ui& ui = ui_.ui();
-    ui.showWorking("Checking printer");
+    if (ui.view().screen == UiScreen::Home) ui.setHomeActivity("Checking assignment...");
+    else ui.showWorking("Checking assignment...");
     ui.render();
     Mapping observed;
     ApiError error = ApiError::None;
@@ -64,7 +66,7 @@ bool App::refreshHome(uint32_t now) {
 void App::confirm(UiAction operation, uint32_t now) {
     Ui& ui = ui_.ui();
     pending_ = UiAction::None;
-    ui.showWorking("Checking printer");
+    ui.showWorking("Checking assignment...");
     ui.render();
     Mapping fresh;
     ApiError error = ApiError::None;
@@ -130,7 +132,7 @@ void App::tick() {
             ota_->dismissFailure();
             refresh_pending_ = true;
             attempted_ = false;
-            ui_.ui().showWorking("Checking printer");
+            ui_.ui().showWorking("Checking assignment...");
             ui_.ui().render();
         }
         return;
@@ -166,7 +168,7 @@ void App::tick() {
                 ui.render();
             }
         } else {
-            ui.showWorking("Checking printer");
+            ui.showWorking("Checking assignment...");
             ui.render();
         }
     } else if (action == UiAction::Load && before == UiScreen::Tag &&
