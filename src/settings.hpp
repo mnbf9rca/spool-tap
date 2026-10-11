@@ -38,3 +38,8 @@ private:
     Preferences preferences_;
     bool ready_ = false;
 };
+
+bool sameDeviceOrigin(const std::string& origin, const std::string& host,
+                      const std::string& device_ip);
+bool parseToolheadId(const std::string& text, int32_t& value);
+std::string renderSettingsPage(const Settings& settings, const std::string& message = "");

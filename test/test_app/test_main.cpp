@@ -2,6 +2,7 @@
 #include <unity.h>
 
 #include "app.hpp"
+#include "settings.hpp"
 
 namespace {
 SpoolInfo spool(uint32_t id) {
@@ -391,16 +392,35 @@ void test_settings_change_clears_preview_and_blocks_actions_until_refresh() {
     TEST_ASSERT_EQUAL_INT(static_cast<int>(UiScreen::Home), static_cast<int>(ui.display.view().screen));
     TEST_ASSERT_TRUE(ui.display.view().stale);
     TEST_ASSERT_EQUAL_INT(static_cast<int>(UiAction::None), static_cast<int>(ui.display.view().left));
+    services.server_spool = 8;
     press(ui, app, UiAction::Load);
     TEST_ASSERT_EQUAL_INT(0, services.map_calls);
-    services.server_spool = 8;
-    clock.now = 2000;
-    ui.next = UiAction::Unload;
-    app.tick();
     TEST_ASSERT_FALSE(ui.display.view().stale);
     TEST_ASSERT_TRUE(hasLine(ui.display, "Spool 8"));
+    ui.next = UiAction::Unload;
     app.tick();
+    TEST_ASSERT_EQUAL_INT(0, services.map_calls);
+}
+
+void test_deferred_web_setting_change_applies_at_next_tick() {
+    FakeReader reader;
+    FakeServices services;
+    services.server_spool = 7;
+    FakeUi ui;
+    ui.display.setPrinterName("Old printer");
+    FakeClock clock;
+    Settings settings;
+    bool pending = false;
+    App app(reader, services, ui, clock, nullptr, &settings, &pending);
+    app.tick();
+    present(reader, app);
+    pending = true;
+    services.server_spool = 8;
+    app.tick();
+    TEST_ASSERT_FALSE(pending);
     TEST_ASSERT_EQUAL_INT(static_cast<int>(UiScreen::Home), static_cast<int>(ui.display.view().screen));
+    TEST_ASSERT_EQUAL_STRING("Core One", ui.display.view().title.c_str());
+    TEST_ASSERT_TRUE(hasLine(ui.display, "Spool 8"));
     TEST_ASSERT_EQUAL_INT(0, services.map_calls);
 }
 } // namespace
@@ -423,6 +443,7 @@ void setup() {
     RUN_TEST(test_archived_missing_and_filament_only_never_offer_load);
     RUN_TEST(test_rejected_and_uncertain_writes_show_error_then_fresh_mapping);
     RUN_TEST(test_settings_change_clears_preview_and_blocks_actions_until_refresh);
+    RUN_TEST(test_deferred_web_setting_change_applies_at_next_tick);
     UNITY_END();
 }
 

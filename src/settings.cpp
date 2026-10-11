@@ -6,6 +6,8 @@
 #include <cstring>
 #include <utility>
 
+#include "logs.hpp"
+
 namespace {
 constexpr size_t kMaxRecordBytes = 1024;
 constexpr uint8_t kRecordVersion = 1;
@@ -192,4 +194,50 @@ bool NvsSettingsStore::write(const std::vector<uint8_t>& bytes) {
 
 NvsSettingsStore::~NvsSettingsStore() {
     if (ready_) preferences_.end();
+}
+
+bool sameDeviceOrigin(const std::string& origin, const std::string& host,
+                      const std::string& device_ip) {
+    if (device_ip.empty() || device_ip == "0.0.0.0") return false;
+    return (host == device_ip && origin == "http://" + device_ip) ||
+           (host == device_ip + ":80" && origin == "http://" + device_ip + ":80");
+}
+
+bool parseToolheadId(const std::string& text, int32_t& value) {
+    if (text.empty()) return false;
+    int32_t parsed = 0;
+    for (char ch : text) {
+        if (ch < '0' || ch > '9') return false;
+        const int digit = ch - '0';
+        if (parsed > (INT32_MAX - digit) / 10) return false;
+        parsed = parsed * 10 + digit;
+    }
+    value = parsed;
+    return true;
+}
+
+std::string renderSettingsPage(const Settings& settings, const std::string& message) {
+    const SettingsInput& saved = settings.current();
+    std::string html = "<!doctype html><html><head><meta charset=\"utf-8\">"
+                       "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">"
+                       "<title>Spool Tap settings</title></head><body><h1>Settings</h1>";
+    if (!message.empty()) html += "<p>" + escapeHtml(message) + "</p>";
+    if (!settings.error().empty())
+        html += "<p role=\"alert\">" + escapeHtml(settings.error()) + "</p>";
+    html += "<form method=\"post\" action=\"/settings\">"
+            "<label>Spoolman HTTPS base URL <input name=\"spoolman_url\" value=\"" +
+            escapeHtml(saved.spoolman_url) + "\" required></label><br>"
+            "<label>FilaBridge HTTPS base URL <input name=\"filabridge_url\" value=\"" +
+            escapeHtml(saved.filabridge_url) + "\" required></label><br>"
+            "<label>Printer name <input name=\"printer_name\" value=\"" +
+            escapeHtml(saved.printer_name) + "\" required></label><br>"
+            "<label>Toolhead ID <input name=\"toolhead_id\" type=\"number\" min=\"0\" max=\"2147483647\" value=\"" +
+            std::to_string(saved.toolhead_id) + "\" required></label><br>"
+            "<label>Scan reader ID <input name=\"reader_id\" value=\"" +
+            escapeHtml(saved.reader_id) + "\" required></label><br>"
+            "<button type=\"submit\">Save settings</button></form>"
+            "<p>Service hosts need Let's Encrypt certificates.</p>"
+            "<p>Wi-Fi and update credentials are set at build time.</p>"
+            "<p><a href=\"/logs\">Recent events</a></p></body></html>";
+    return html;
 }

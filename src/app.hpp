@@ -3,12 +3,14 @@
 #include "tap_ports.hpp"
 
 class Logs;
+class Settings;
 
 class App {
 public:
     App(ReaderPort& reader, ServicesPort& services, UiPort& ui, ClockPort& clock,
-        Logs* logs = nullptr)
-        : reader_(reader), services_(services), ui_(ui), clock_(clock), logs_(logs) {}
+        Logs* logs = nullptr, Settings* settings = nullptr, bool* settings_change_pending = nullptr)
+        : reader_(reader), services_(services), ui_(ui), clock_(clock), logs_(logs),
+          settings_(settings), settings_change_pending_(settings_change_pending) {}
 
     void tick();
     void settingsChanged();
@@ -24,6 +26,8 @@ private:
     UiPort& ui_;
     ClockPort& clock_;
     Logs* logs_;
+    Settings* settings_;
+    bool* settings_change_pending_;
     Mapping mapping_;
     SpoolInfo current_spool_;
     TagRead candidate_tag_;

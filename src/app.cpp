@@ -1,6 +1,7 @@
 #include "app.hpp"
 
 #include "logs.hpp"
+#include "settings.hpp"
 
 bool App::showMapping(const Mapping& observed, uint32_t now) {
     Ui& ui = ui_.ui();
@@ -102,18 +103,24 @@ void App::confirm(UiAction operation, uint32_t now) {
 
 void App::settingsChanged() {
     if (logs_) logs_->add(LogLevel::Info, LogEvent::SettingsChanged);
+    if (settings_) ui_.ui().setPrinterName(settings_->current().printer_name);
     candidate_ = {};
     candidate_tag_ = {};
     candidate_hints_ = {};
     pending_ = UiAction::None;
     mapping_.stale = true;
     refresh_pending_ = true;
+    attempted_ = false;
     Ui& ui = ui_.ui();
     ui.showHome(mapping_, current_spool_.id == mapping_.spool_id ? &current_spool_ : nullptr);
     ui.render();
 }
 
 void App::tick() {
+    if (settings_change_pending_ && *settings_change_pending_) {
+        *settings_change_pending_ = false;
+        settingsChanged();
+    }
     Ui& ui = ui_.ui();
     const uint32_t now = clock_.millis();
     const UiAction action = ui_.pollAction();
