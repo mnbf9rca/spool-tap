@@ -55,9 +55,14 @@ std::string escapeHtml(const std::string& text) {
 }
 
 void Logs::add(LogLevel level, LogEvent message, std::time_t now) {
+    add(level, message, "", now);
+}
+
+void Logs::add(LogLevel level, LogEvent message, const std::string& detail, std::time_t now) {
     entries_[next_].when = now;
     entries_[next_].level = level;
     entries_[next_].event = message;
+    entries_[next_].detail = detail.substr(0, 256);
     next_ = (next_ + 1) % entries_.size();
     if (size_ < entries_.size()) ++size_;
 }
@@ -79,6 +84,10 @@ std::string Logs::renderHtml() const {
         html += escapeHtml(levelText(entry.level));
         html += ": ";
         html += escapeHtml(eventText(entry.event));
+        if (!entry.detail.empty()) {
+            html += ": ";
+            html += escapeHtml(entry.detail);
+        }
         html += "</li>";
     }
     html += "</ol></body></html>";

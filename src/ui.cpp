@@ -87,6 +87,7 @@ const char* errorText(ApiError error) {
     case ApiError::TooLarge: return "Response too large";
     case ApiError::InvalidUrl: return "Invalid HTTPS URL";
     case ApiError::Malformed: return "Invalid service response";
+    case ApiError::MissingPrinter: return "Printer not found";
     case ApiError::MissingSpool: return "Spool not found";
     case ApiError::ArchivedSpool: return "Spool archived";
     case ApiError::Conflict: return "Spool already in use";
@@ -157,13 +158,16 @@ std::string Ui::connectionText(bool bridge) const {
     if (view_.spool_error == ApiError::MissingSpool) return "Spool not found";
     if (view_.spool_error == ApiError::ArchivedSpool) return "Spool archived";
     if (view_.spool_error != ApiError::None) return "Spoolman unavailable";
+    if (view_.mapping_error == ApiError::MissingPrinter) return "Printer not found";
     if (!bridge) return "FilaBridge unavailable";
     return "";
 }
 
-void Ui::showHome(const Mapping& mapping, const SpoolInfo* spool, ApiError spool_error) {
+void Ui::showHome(const Mapping& mapping, const SpoolInfo* spool, ApiError spool_error,
+                  ApiError mapping_error) {
     start(UiScreen::Home, "");
     view_.spool_error = spool_error;
+    view_.mapping_error = mapping_error;
     view_.status = connectionText(bridge_ && !mapping.stale);
     view_.stale = mapping.stale;
     if (mapping.stale) view_.bridge = false;
@@ -267,19 +271,33 @@ void Ui::showWorking(const char* activity) {
 }
 
 void Ui::showError(ApiError error, const char* failed_operation) {
-    if (error == ApiError::ArchivedSpool || error == ApiError::MissingSpool) {
+    if (error == ApiError::Wifi) {
+        start(UiScreen::Error, "");
+        view_.status = connectionText(false);
+        lines_.push_back({"Check Wi-Fi", 0});
+    } else if (error == ApiError::MissingPrinter) {
+        start(UiScreen::Error, "");
+        view_.mapping_error = error;
+        view_.status = connectionText(false);
+        lines_.push_back({"Check printer name", 0});
+        lines_.push_back({"in Settings", 0});
+        lines_.push_back({"matches FilaBridge", 0});
+    } else if (error == ApiError::ArchivedSpool || error == ApiError::MissingSpool) {
         start(UiScreen::Error, errorText(error));
-        lines_.push_back({error == ApiError::ArchivedSpool ? "Cannot load" : "Check in Spoolman", 0});
+        lines_.push_back({error == ApiError::ArchivedSpool ? "Unarchive in Spoolman" :
+                          "Check in Spoolman", 0});
     } else if (failed_operation && error != ApiError::InvalidTag) {
         start(UiScreen::Error, "");
         view_.spool_error = error;
         view_.status = connectionText(bridge_);
         lines_.push_back({failed_operation, 0});
+        lines_.push_back({errorText(error), 0});
         lines_.push_back({"Back to retry", 0});
     } else {
         start(UiScreen::Error, "Error");
         view_.status = connectionText(bridge_);
         lines_.push_back({errorText(error), 0});
+        if (error == ApiError::InvalidTag) lines_.push_back({"Tap tag again", 0});
     }
     view_.right = UiAction::Back;
 }
@@ -370,7 +388,7 @@ void Ui::render() const {
         M5.Display.setTextColor(TFT_WHITE, background);
         y += 28;
     }
-    if (view_.color_hex.size() == 6 && view_.title.size() <= 15) {
+    if (view_.color_hex.size() == 6) {
         uint32_t rgb = 0;
         bool valid = true;
         for (char c : view_.color_hex) {
@@ -378,10 +396,8 @@ void Ui::render() const {
             if (nibble < 0) { valid = false; break; }
             rgb = (rgb << 4) | static_cast<uint32_t>(nibble);
         }
-        if (valid) {
-            M5.Display.fillRect(293, 6, 20, 20, M5.Display.color565(rgb >> 16, rgb >> 8, rgb));
-            M5.Display.drawRect(293, 6, 20, 20, TFT_WHITE);
-        }
+        if (valid) M5.Display.fillRect(312, 0, 8, kHomeActivityTop,
+                                        M5.Display.color565(rgb >> 16, rgb >> 8, rgb));
     }
     const int contentBottom = view_.screen == UiScreen::Home ? kHomeActivityTop : kButtonsTop;
     const size_t slots = y < contentBottom ? static_cast<size_t>((contentBottom - y) / 27) : 0;

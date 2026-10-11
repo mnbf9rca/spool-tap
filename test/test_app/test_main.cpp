@@ -4,6 +4,7 @@
 #include "app.hpp"
 #include "settings.hpp"
 #include "ota.hpp"
+#include "logs.hpp"
 
 namespace {
 SpoolInfo spool(uint32_t id) {
@@ -586,6 +587,99 @@ void test_deferred_web_setting_change_applies_at_next_tick() {
     TEST_ASSERT_TRUE(hasLine(ui.display, "Spool 8"));
     TEST_ASSERT_EQUAL_INT(0, services.map_calls);
 }
+
+void test_logs_trace_scan_and_mapping_without_unchanged_refresh_noise() {
+    FakeReader reader;
+    reader.tag.type = "NTAG215";
+    reader.hints.brand = "Prusament";
+    reader.hints.material = "PETG";
+    FakeServices services;
+    services.server_spool = 7;
+    services.scan_result.spool.vendor = "FilaPrint";
+    services.scan_result.spool.name = "Jet Black";
+    services.scan_result.spool.material = "PETG";
+    FakeUi ui;
+    FakeClock clock;
+    Logs logs;
+    App app(reader, services, ui, clock, &logs);
+    app.tick();
+    TEST_ASSERT_NOT_NULL(strstr(logs.renderHtml().c_str(), "FilaBridge spool #7"));
+    const size_t count = logs.size();
+    clock.now = 30000;
+    app.tick();
+    TEST_ASSERT_EQUAL_UINT32(count, logs.size());
+    present(reader, app);
+    const std::string html = logs.renderHtml();
+    TEST_ASSERT_NOT_NULL(strstr(html.c_str(), "UID=A1B2"));
+    TEST_ASSERT_NOT_NULL(strstr(html.c_str(), "Prusament"));
+    TEST_ASSERT_NOT_NULL(strstr(html.c_str(), "Spoolman spool #9"));
+    TEST_ASSERT_NOT_NULL(strstr(html.c_str(), "FilaPrint"));
+    TEST_ASSERT_NOT_NULL(strstr(html.c_str(), "Jet Black"));
+}
+
+void test_logs_name_unlinked_filament_and_failed_scan_outcomes() {
+    FakeReader reader;
+    FakeServices services;
+    FakeUi ui;
+    FakeClock clock;
+    Logs logs;
+    App app(reader, services, ui, clock, &logs);
+    app.tick();
+    services.scan_result = {};
+    present(reader, app);
+    reader.present = false;
+    app.tick();
+    services.scan_result.kind = ScanKind::FilamentOnly;
+    services.scan_result.filament_id = 42;
+    present(reader, app);
+    reader.present = false;
+    app.tick();
+    services.scan_ok = false;
+    services.scan_error = ApiError::Timeout;
+    present(reader, app);
+    const std::string html = logs.renderHtml();
+    TEST_ASSERT_NOT_NULL(strstr(html.c_str(), "Spoolman no tag match"));
+    TEST_ASSERT_NOT_NULL(strstr(html.c_str(), "Spoolman filament #42, no spool"));
+    TEST_ASSERT_NOT_NULL(strstr(html.c_str(), "UID=A1B2; Spoolman timeout"));
+}
+
+void test_logs_first_mapping_failure_once_until_recovery() {
+    FakeReader reader;
+    FakeServices services;
+    services.mapping_ok = false;
+    FakeUi ui;
+    services.observed_ui = &ui.display;
+    FakeClock clock;
+    Logs logs;
+    App app(reader, services, ui, clock, &logs);
+    app.tick();
+    TEST_ASSERT_NOT_NULL(strstr(logs.renderHtml().c_str(), "FilaBridge timeout"));
+    const size_t count = logs.size();
+    clock.now = 2000;
+    app.tick();
+    TEST_ASSERT_EQUAL_UINT32(count, logs.size());
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(UiScreen::Error), static_cast<int>(services.mapping_screen));
+    services.mapping_ok = true;
+    clock.now = 4000;
+    app.tick();
+    TEST_ASSERT_NOT_NULL(strstr(logs.renderHtml().c_str(), "FilaBridge empty"));
+}
+
+void test_missing_printer_after_settings_change_stays_specific_on_home() {
+    FakeReader reader;
+    FakeServices services;
+    FakeUi ui;
+    ui.display.setConnections(true, true, true);
+    FakeClock clock;
+    App app(reader, services, ui, clock);
+    app.tick();
+    app.settingsChanged();
+    services.mapping_ok = false;
+    services.mapping_error = ApiError::MissingPrinter;
+    app.tick();
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(UiScreen::Home), static_cast<int>(ui.display.view().screen));
+    TEST_ASSERT_EQUAL_STRING("Printer not found", ui.display.view().status.c_str());
+}
 } // namespace
 
 void setup() {
@@ -611,6 +705,10 @@ void setup() {
     RUN_TEST(test_rejected_and_uncertain_writes_show_error_then_fresh_mapping);
     RUN_TEST(test_settings_change_clears_preview_and_blocks_actions_until_refresh);
     RUN_TEST(test_deferred_web_setting_change_applies_at_next_tick);
+    RUN_TEST(test_logs_trace_scan_and_mapping_without_unchanged_refresh_noise);
+    RUN_TEST(test_logs_name_unlinked_filament_and_failed_scan_outcomes);
+    RUN_TEST(test_logs_first_mapping_failure_once_until_recovery);
+    RUN_TEST(test_missing_printer_after_settings_change_stays_specific_on_home);
     RUN_TEST(test_ota_upload_blocks_mapping_and_scans);
     UNITY_END();
 }

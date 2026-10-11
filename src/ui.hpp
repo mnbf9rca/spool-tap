@@ -22,12 +22,14 @@ struct UiView {
     bool nfc = false;
     bool bridge = false;
     ApiError spool_error = ApiError::None;
+    ApiError mapping_error = ApiError::None;
 };
 
 class Ui {
 public:
     void setConnections(bool wifi, bool nfc, bool bridge);
-    void showHome(const Mapping& mapping, const SpoolInfo* spool, ApiError spool_error = ApiError::None);
+    void showHome(const Mapping& mapping, const SpoolInfo* spool, ApiError spool_error = ApiError::None,
+                  ApiError mapping_error = ApiError::None);
     void showTag(const TagRead& tag, const TagHints& hints, const ScanMatch& match,
                  const SpoolInfo* current_spool);
     void showWorking(const char* activity);

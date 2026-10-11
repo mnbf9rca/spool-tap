@@ -169,10 +169,31 @@ void test_connection_changes_update_visible_home_status() {
     TEST_ASSERT_EQUAL_STRING("Spoolman unavailable", ui.view().status.c_str());
     ui.setConnections(true, true, true);
     TEST_ASSERT_EQUAL_STRING("Spoolman unavailable", ui.view().status.c_str());
+    ui.showHome(mapping, nullptr, ApiError::None, ApiError::MissingPrinter);
+    TEST_ASSERT_EQUAL_STRING("Printer not found", ui.view().status.c_str());
     ui.showError(ApiError::Timeout, "Tag lookup failed");
     TEST_ASSERT_EQUAL_STRING("Spoolman unavailable", ui.view().status.c_str());
     TEST_ASSERT_TRUE(hasLine(ui.visibleLines(5), "Tag lookup failed"));
+    TEST_ASSERT_TRUE(hasLine(ui.visibleLines(5), "Request timed out"));
     TEST_ASSERT_TRUE(hasLine(ui.visibleLines(5), "Back to retry"));
+}
+
+void test_missing_filabridge_printer_has_actionable_message() {
+    Ui ui;
+    ui.setConnections(true, true, false);
+    ui.showError(ApiError::MissingPrinter);
+    TEST_ASSERT_EQUAL_STRING("Printer not found", ui.view().status.c_str());
+    TEST_ASSERT_TRUE(hasLine(ui.visibleLines(5), "Check printer name"));
+    TEST_ASSERT_TRUE(hasLine(ui.visibleLines(5), "in Settings"));
+    TEST_ASSERT_TRUE(hasLine(ui.visibleLines(5), "matches FilaBridge"));
+}
+
+void test_wifi_error_gives_one_problem_and_one_remedy() {
+    Ui ui;
+    ui.showError(ApiError::Wifi);
+    TEST_ASSERT_EQUAL_STRING("Wi-Fi disconnected", ui.view().status.c_str());
+    TEST_ASSERT_TRUE(hasLine(ui.visibleLines(5), "Check Wi-Fi"));
+    TEST_ASSERT_FALSE(hasLine(ui.visibleLines(5), "Wi-Fi unavailable"));
 }
 
 void test_linked_tag_preview_offers_load_and_cancel() {
@@ -236,7 +257,8 @@ void test_archived_and_missing_spools_have_specific_no_load_views() {
     TagRead tag;
     ui.showTag(tag, {}, match, nullptr);
     TEST_ASSERT_EQUAL_STRING("Spool archived", ui.view().title.c_str());
-    TEST_ASSERT_TRUE(hasLine(ui.visibleLines(5), "Cannot load"));
+    TEST_ASSERT_TRUE(hasLine(ui.visibleLines(5), "Unarchive"));
+    TEST_ASSERT_TRUE(hasLine(ui.visibleLines(5), "Spoolman"));
     TEST_ASSERT_EQUAL_STRING("", ui.view().status.c_str());
     TEST_ASSERT_EQUAL_INT(static_cast<int>(UiAction::None), static_cast<int>(ui.actionAt(40, 210)));
     ui.showError(ApiError::MissingSpool);
@@ -245,6 +267,7 @@ void test_archived_and_missing_spools_have_specific_no_load_views() {
     ui.showError(ApiError::InvalidTag);
     TEST_ASSERT_TRUE(hasLine(ui.visibleLines(5), "Tag UID"));
     TEST_ASSERT_TRUE(hasLine(ui.visibleLines(5), "unreadable"));
+    TEST_ASSERT_TRUE(hasLine(ui.visibleLines(5), "Tap tag again"));
 }
 
 void test_unreadable_ndef_keeps_linked_spool_loadable() {
@@ -399,6 +422,8 @@ void setup() {
     RUN_TEST(test_home_drop_order_and_unknown_remaining);
     RUN_TEST(test_empty_or_stale_home_cannot_unload);
     RUN_TEST(test_connection_changes_update_visible_home_status);
+    RUN_TEST(test_missing_filabridge_printer_has_actionable_message);
+    RUN_TEST(test_wifi_error_gives_one_problem_and_one_remedy);
     RUN_TEST(test_linked_tag_preview_offers_load_and_cancel);
     RUN_TEST(test_unknown_tag_shows_uid_type_hints_and_back_only);
     RUN_TEST(test_filament_only_prompts_for_spool_assignment_without_load);

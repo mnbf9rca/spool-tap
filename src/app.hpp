@@ -39,6 +39,8 @@ private:
     bool refresh_pending_ = true;
     bool attempted_ = false;
     bool bridge_ready_ = false;
+    bool mapping_failure_logged_ = false;
+    ApiError last_mapping_error_ = ApiError::None;
     uint32_t last_attempt_ = 0;
     uint32_t last_refresh_ = 0;
 };

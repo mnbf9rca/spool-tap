@@ -38,11 +38,23 @@ void test_page_has_safe_events_and_no_secret_input_channel() {
     TEST_ASSERT_NULL(strstr(html.c_str(), "NDEF"));
 }
 
+void test_context_is_escaped_and_bounded_in_ram() {
+    Logs logs;
+    logs.add(LogLevel::Info, LogEvent::TagScanned,
+             "UID=A1B2 brand=<Prusa>&\"' " + std::string(300, 'x'), 1760140800);
+    const std::string html = logs.renderHtml();
+    TEST_ASSERT_NOT_NULL(strstr(html.c_str(), "UID=A1B2"));
+    TEST_ASSERT_NOT_NULL(strstr(html.c_str(), "brand=&lt;Prusa&gt;&amp;&quot;&#39;"));
+    TEST_ASSERT_NULL(strstr(html.c_str(), "<Prusa>"));
+    TEST_ASSERT_NULL(strstr(html.c_str(), std::string(300, 'x').c_str()));
+}
+
 void setup() {
     UNITY_BEGIN();
     RUN_TEST(test_ring_keeps_newest_one_hundred_timestamped_events);
     RUN_TEST(test_html_escapes_all_dynamic_text_characters);
     RUN_TEST(test_page_has_safe_events_and_no_secret_input_channel);
+    RUN_TEST(test_context_is_escaped_and_bounded_in_ram);
     UNITY_END();
 }
 

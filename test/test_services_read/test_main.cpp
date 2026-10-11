@@ -108,7 +108,7 @@ void test_duplicate_or_missing_printer_and_malformed_mapping_fail() {
     configure(settings, "Absent", 0);
     fake.response.body = statusFixture;
     TEST_ASSERT_FALSE(services.getMapping(mapping, error));
-    TEST_ASSERT_EQUAL_INT(static_cast<int>(ApiError::Malformed), static_cast<int>(error));
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(ApiError::MissingPrinter), static_cast<int>(error));
     configure(settings, "Core One", 0);
     fake.response.body = replaceOnce(statusFixture, "\"spool_id\":7", "\"spool_id\":-1");
     TEST_ASSERT_FALSE(services.getMapping(mapping, error));

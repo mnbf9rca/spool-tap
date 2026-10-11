@@ -25,7 +25,9 @@ bool unsignedId(const cJSON* item, uint32_t& id) {
     return true;
 }
 
-bool parseMapping(const std::string& body, const SettingsInput& settings, Mapping& mapping) {
+bool parseMapping(const std::string& body, const SettingsInput& settings, Mapping& mapping,
+                  ApiError& error) {
+    error = ApiError::Malformed;
     Json root = parseJson(body);
     if (!root || !cJSON_IsObject(root.get())) return false;
     const cJSON* printers = cJSON_GetObjectItemCaseSensitive(root.get(), "printers");
@@ -42,7 +44,7 @@ bool parseMapping(const std::string& body, const SettingsInput& settings, Mappin
             printer_id = printer->string;
         }
     }
-    if (!printer_id) return false;
+    if (!printer_id) { error = ApiError::MissingPrinter; return false; }
 
     const cJSON* printer_mappings = cJSON_GetObjectItemCaseSensitive(mappings, printer_id);
     if (!printer_mappings) { mapping.spool_id = 0; mapping.stale = false; return true; }
@@ -99,10 +101,7 @@ bool Services::getMapping(Mapping& out, ApiError& error) {
     if (!transport_.request("GET", url.c_str(), "", response, error)) return false;
     if (response.status != 200) { error = ApiError::Http; return false; }
     Mapping candidate;
-    if (!parseMapping(response.body, settings_.current(), candidate)) {
-        error = ApiError::Malformed;
-        return false;
-    }
+    if (!parseMapping(response.body, settings_.current(), candidate, error)) return false;
     out = candidate;
     error = ApiError::None;
     return true;

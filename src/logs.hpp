@@ -17,6 +17,7 @@ struct LogEntry {
     std::time_t when = 0;
     LogLevel level = LogLevel::Info;
     LogEvent event = LogEvent::Boot;
+    std::string detail;
 };
 
 std::string escapeHtml(const std::string& text);
@@ -24,6 +25,8 @@ std::string escapeHtml(const std::string& text);
 class Logs {
 public:
     void add(LogLevel level, LogEvent message, std::time_t now = std::time(nullptr));
+    void add(LogLevel level, LogEvent message, const std::string& detail,
+             std::time_t now = std::time(nullptr));
     std::string renderHtml() const;
     size_t size() const { return size_; }
 

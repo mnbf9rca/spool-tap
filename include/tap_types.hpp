@@ -65,5 +65,5 @@ struct ScanMatch {
 
 enum class ApiError {
     None, Wifi, Time, Dns, Tls, Timeout, Http, TooLarge, InvalidUrl,
-    Malformed, MissingSpool, ArchivedSpool, Conflict, InvalidTag
+    Malformed, MissingPrinter, MissingSpool, ArchivedSpool, Conflict, InvalidTag
 };
