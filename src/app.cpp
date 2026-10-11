@@ -1,7 +1,6 @@
 #include "app.hpp"
 
 #include "logs.hpp"
-#include "settings.hpp"
 #include "ota.hpp"
 
 #ifndef SPOOL_TAP_VERSION
@@ -12,6 +11,8 @@ bool App::showMapping(const Mapping& observed, uint32_t now) {
     Ui& ui = ui_.ui();
     SpoolInfo details;
     if (observed.spool_id) {
+        ui.showWorking("Reading spool");
+        ui.render();
         ApiError error = ApiError::None;
         if (!services_.getSpool(observed.spool_id, details, error)) {
             if (logs_ && !mapping_.stale) logs_->add(LogLevel::Warning, LogEvent::SpoolFailed);
@@ -21,8 +22,8 @@ bool App::showMapping(const Mapping& observed, uint32_t now) {
             if (!same_spool) current_spool_ = {};
             have_home_ = true;
             refresh_pending_ = true;
-            if (same_spool) ui.showHome(mapping_, &current_spool_);
-            else ui.showError(error);
+            if (same_spool) ui.showHome(mapping_, &current_spool_, error);
+            else ui.showError(error, "Spool lookup failed");
             ui.render();
             return false;
         }
@@ -41,7 +42,7 @@ bool App::showMapping(const Mapping& observed, uint32_t now) {
 
 bool App::refreshHome(uint32_t now) {
     Ui& ui = ui_.ui();
-    ui.showWorking();
+    ui.showWorking("Checking printer");
     ui.render();
     Mapping observed;
     ApiError error = ApiError::None;
@@ -63,7 +64,7 @@ bool App::refreshHome(uint32_t now) {
 void App::confirm(UiAction operation, uint32_t now) {
     Ui& ui = ui_.ui();
     pending_ = UiAction::None;
-    ui.showWorking();
+    ui.showWorking("Checking printer");
     ui.render();
     Mapping fresh;
     ApiError error = ApiError::None;
@@ -90,6 +91,8 @@ void App::confirm(UiAction operation, uint32_t now) {
     const uint32_t target = operation == UiAction::Load ? candidate_.spool_id : 0;
     const SpoolInfo previous_spool = current_spool_;
     Mapping after = mapping_;
+    ui.showWorking(operation == UiAction::Load ? "Loading spool" : "Unloading spool");
+    ui.render();
     const bool mapped = services_.mapToolhead(target, after, error);
     if (!mapped) {
         if (logs_) logs_->add(LogLevel::Error, LogEvent::MappingWriteFailed);
@@ -108,7 +111,6 @@ void App::confirm(UiAction operation, uint32_t now) {
 
 void App::settingsChanged() {
     if (logs_) logs_->add(LogLevel::Info, LogEvent::SettingsChanged);
-    if (settings_) ui_.ui().setPrinterName(settings_->current().printer_name);
     candidate_ = {};
     candidate_tag_ = {};
     candidate_hints_ = {};
@@ -128,7 +130,7 @@ void App::tick() {
             ota_->dismissFailure();
             refresh_pending_ = true;
             attempted_ = false;
-            ui_.ui().showWorking();
+            ui_.ui().showWorking("Checking printer");
             ui_.ui().render();
         }
         return;
@@ -164,7 +166,7 @@ void App::tick() {
                 ui.render();
             }
         } else {
-            ui.showWorking();
+            ui.showWorking("Checking printer");
             ui.render();
         }
     } else if (action == UiAction::Load && before == UiScreen::Tag &&
@@ -189,13 +191,13 @@ void App::tick() {
     const bool presented = reader_.poll(tag, hints);
     if (!presented || before != UiScreen::Home || action != UiAction::None ||
         !have_home_ || mapping_.stale) return;
-    ui.showWorking();
+    ui.showWorking("Checking tag");
     ui.render();
     ScanMatch match;
     ApiError error = ApiError::None;
     if (!services_.scan(tag, match, error)) {
         if (logs_) logs_->add(LogLevel::Warning, LogEvent::ScanFailed);
-        ui.showError(error);
+        ui.showError(error, "Tag lookup failed");
     } else {
         if (logs_) logs_->add(LogLevel::Info, LogEvent::TagScanned);
         candidate_tag_ = tag;

@@ -113,7 +113,7 @@ DeviceReader app_reader(reader);
 DeviceServices app_services(services);
 DeviceUi app_ui(ui);
 DeviceClock app_clock;
-App app(app_reader, app_services, app_ui, app_clock, &logs, &settings,
+App app(app_reader, app_services, app_ui, app_clock, &logs,
         &settings_change_pending, &ota);
 
 void updateConnections() {
@@ -143,9 +143,8 @@ void setup() {
     net.begin();
     web.begin();
     services.setBetweenRequests(pumpWeb);
-    ui.setPrinterName(settings.current().printer_name);
     ui.setConnections(false, reader_ready, false);
-    ui.showWorking();
+    ui.showWorking("Connecting Wi-Fi");
     ui.render();
     Serial.printf("SPOOL_TAP_BOOT NFC_READY=%d\n", reader_ready);
     Serial.printf("SPOOL_TAP_VERSION=%s\n", SPOOL_TAP_VERSION);

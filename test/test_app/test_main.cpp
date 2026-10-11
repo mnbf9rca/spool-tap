@@ -51,6 +51,11 @@ public:
 
 class FakeServices : public ServicesPort {
 public:
+    Ui* observed_ui = nullptr;
+    std::string mapping_title;
+    std::string spool_title;
+    std::string scan_title;
+    std::string map_title;
     uint32_t server_spool = 0;
     bool mapping_ok = true;
     bool spool_ok = true;
@@ -67,6 +72,7 @@ public:
     uint32_t mapped_id = 99;
 
     bool getMapping(Mapping& out, ApiError& error) override {
+        if (observed_ui) mapping_title = observed_ui->view().title;
         ++mapping_calls;
         if (!mapping_ok) { error = mapping_error; return false; }
         out.spool_id = server_spool;
@@ -75,6 +81,7 @@ public:
         return true;
     }
     bool getSpool(uint32_t id, SpoolInfo& out, ApiError& error) override {
+        if (observed_ui) spool_title = observed_ui->view().title;
         ++spool_calls;
         if (!spool_ok) { error = ApiError::MissingSpool; return false; }
         out = spool(id);
@@ -82,6 +89,7 @@ public:
         return true;
     }
     bool scan(const TagRead&, ScanMatch& out, ApiError& error) override {
+        if (observed_ui) scan_title = observed_ui->view().title;
         ++scan_calls;
         if (!scan_ok) { error = scan_error; return false; }
         out = scan_result;
@@ -89,6 +97,7 @@ public:
         return true;
     }
     bool mapToolhead(uint32_t id, Mapping& after, ApiError& error) override {
+        if (observed_ui) map_title = observed_ui->view().title;
         ++map_calls;
         mapped_id = id;
         if (map_ok) server_spool = id;
@@ -137,7 +146,7 @@ void test_ota_upload_blocks_mapping_and_scans() {
     FakeClock clock;
     FakeOtaPort port;
     Ota ota(port);
-    App app(reader, services, ui, clock, nullptr, nullptr, nullptr, &ota);
+    App app(reader, services, ui, clock, nullptr, nullptr, &ota);
     app.tick();
     const int polls = reader.polls;
     TEST_ASSERT_EQUAL_INT(static_cast<int>(OtaStatus::Receiving),
@@ -186,6 +195,28 @@ void test_scan_requires_load_and_confirmation_before_mapping() {
     TEST_ASSERT_EQUAL_INT(static_cast<int>(UiScreen::Success), static_cast<int>(ui.display.view().screen));
     TEST_ASSERT_TRUE(hasLine(ui.display, "Spool 9"));
     TEST_ASSERT_FALSE(hasLine(ui.display, "Old scan name"));
+}
+
+void test_working_title_names_the_active_service_operation() {
+    FakeReader reader;
+    FakeServices services;
+    services.server_spool = 7;
+    FakeUi ui;
+    services.observed_ui = &ui.display;
+    FakeClock clock;
+    App app(reader, services, ui, clock);
+    app.tick();
+    TEST_ASSERT_EQUAL_STRING("Checking printer", services.mapping_title.c_str());
+    TEST_ASSERT_EQUAL_STRING("Reading spool", services.spool_title.c_str());
+    present(reader, app);
+    TEST_ASSERT_EQUAL_STRING("Checking tag", services.scan_title.c_str());
+    press(ui, app, UiAction::Load);
+    press(ui, app, UiAction::Confirm);
+    TEST_ASSERT_EQUAL_STRING("Loading spool", services.map_title.c_str());
+    press(ui, app, UiAction::Back);
+    press(ui, app, UiAction::Unload);
+    press(ui, app, UiAction::Confirm);
+    TEST_ASSERT_EQUAL_STRING("Unloading spool", services.map_title.c_str());
 }
 
 void test_unload_names_current_spool_and_maps_zero_only_after_confirmation() {
@@ -306,7 +337,7 @@ void test_working_screen_ignores_new_scan() {
     FakeClock clock;
     App app(reader, services, ui, clock);
     app.tick();
-    ui.display.showWorking();
+    ui.display.showWorking("Checking printer");
     present(reader, app);
     TEST_ASSERT_EQUAL_INT(0, services.scan_calls);
     TEST_ASSERT_EQUAL_INT(0, services.map_calls);
@@ -334,6 +365,7 @@ void test_failed_spool_refresh_keeps_last_confirmed_details_stale() {
     FakeServices services;
     services.server_spool = 7;
     FakeUi ui;
+    ui.display.setConnections(true, true, true);
     FakeClock clock;
     App app(reader, services, ui, clock);
     app.tick();
@@ -341,6 +373,7 @@ void test_failed_spool_refresh_keeps_last_confirmed_details_stale() {
     clock.now = 30000;
     app.tick();
     TEST_ASSERT_TRUE(ui.display.view().stale);
+    TEST_ASSERT_EQUAL_STRING("Spool not found", ui.display.view().status.c_str());
     TEST_ASSERT_TRUE(hasLine(ui.display, "Spool 7"));
     TEST_ASSERT_EQUAL_INT(static_cast<int>(UiAction::None), static_cast<int>(ui.display.view().left));
 }
@@ -351,11 +384,14 @@ void test_missing_current_spool_shows_specific_error_and_disables_unload() {
     services.server_spool = 7;
     services.spool_ok = false;
     FakeUi ui;
+    ui.display.setConnections(true, true, true);
     FakeClock clock;
     App app(reader, services, ui, clock);
     app.tick();
     TEST_ASSERT_EQUAL_INT(static_cast<int>(UiScreen::Error), static_cast<int>(ui.display.view().screen));
-    TEST_ASSERT_TRUE(hasLine(ui.display, "Spool not found"));
+    TEST_ASSERT_EQUAL_STRING("", ui.display.view().status.c_str());
+    TEST_ASSERT_EQUAL_STRING("Spool not found", ui.display.view().title.c_str());
+    TEST_ASSERT_TRUE(hasLine(ui.display, "Check in Spoolman"));
     press(ui, app, UiAction::Back);
     TEST_ASSERT_TRUE(ui.display.view().stale);
     TEST_ASSERT_EQUAL_INT(static_cast<int>(UiAction::None), static_cast<int>(ui.display.view().left));
@@ -389,6 +425,24 @@ void test_archived_missing_and_filament_only_never_offer_load() {
     TEST_ASSERT_EQUAL_INT(static_cast<int>(UiScreen::Tag), static_cast<int>(ui.display.view().screen));
     TEST_ASSERT_EQUAL_INT(static_cast<int>(UiAction::None), static_cast<int>(ui.display.view().left));
     press(ui, app, UiAction::Load);
+    TEST_ASSERT_EQUAL_INT(0, services.map_calls);
+}
+
+void test_spoolman_timeout_shows_retry_without_a_spool_remedy() {
+    FakeReader reader;
+    FakeServices services;
+    services.scan_ok = false;
+    services.scan_error = ApiError::Timeout;
+    FakeUi ui;
+    ui.display.setConnections(true, true, true);
+    FakeClock clock;
+    App app(reader, services, ui, clock);
+    app.tick();
+    present(reader, app);
+    TEST_ASSERT_EQUAL_STRING("Spoolman unavailable", ui.display.view().status.c_str());
+    TEST_ASSERT_TRUE(hasLine(ui.display, "Tag lookup failed"));
+    TEST_ASSERT_TRUE(hasLine(ui.display, "Back to retry"));
+    TEST_ASSERT_FALSE(hasLine(ui.display, "Assign in Spoolman"));
     TEST_ASSERT_EQUAL_INT(0, services.map_calls);
 }
 
@@ -445,11 +499,9 @@ void test_deferred_web_setting_change_applies_at_next_tick() {
     FakeServices services;
     services.server_spool = 7;
     FakeUi ui;
-    ui.display.setPrinterName("Old printer");
     FakeClock clock;
-    Settings settings;
     bool pending = false;
-    App app(reader, services, ui, clock, nullptr, &settings, &pending);
+    App app(reader, services, ui, clock, nullptr, &pending);
     app.tick();
     present(reader, app);
     pending = true;
@@ -457,7 +509,7 @@ void test_deferred_web_setting_change_applies_at_next_tick() {
     app.tick();
     TEST_ASSERT_FALSE(pending);
     TEST_ASSERT_EQUAL_INT(static_cast<int>(UiScreen::Home), static_cast<int>(ui.display.view().screen));
-    TEST_ASSERT_EQUAL_STRING("Core One", ui.display.view().title.c_str());
+    TEST_ASSERT_EQUAL_STRING("", ui.display.view().title.c_str());
     TEST_ASSERT_TRUE(hasLine(ui.display, "Spool 8"));
     TEST_ASSERT_EQUAL_INT(0, services.map_calls);
 }
@@ -468,6 +520,7 @@ void setup() {
     delay(2000);
     UNITY_BEGIN();
     RUN_TEST(test_scan_requires_load_and_confirmation_before_mapping);
+    RUN_TEST(test_working_title_names_the_active_service_operation);
     RUN_TEST(test_unload_names_current_spool_and_maps_zero_only_after_confirmation);
     RUN_TEST(test_cancel_never_posts_for_load_or_unload);
     RUN_TEST(test_changed_mapping_requires_new_load_confirmation);
@@ -479,6 +532,7 @@ void setup() {
     RUN_TEST(test_failed_spool_refresh_keeps_last_confirmed_details_stale);
     RUN_TEST(test_missing_current_spool_shows_specific_error_and_disables_unload);
     RUN_TEST(test_archived_missing_and_filament_only_never_offer_load);
+    RUN_TEST(test_spoolman_timeout_shows_retry_without_a_spool_remedy);
     RUN_TEST(test_rejected_and_uncertain_writes_show_error_then_fresh_mapping);
     RUN_TEST(test_settings_change_clears_preview_and_blocks_actions_until_refresh);
     RUN_TEST(test_deferred_web_setting_change_applies_at_next_tick);

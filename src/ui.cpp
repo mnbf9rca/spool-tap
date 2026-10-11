@@ -8,7 +8,7 @@
 #endif
 
 namespace {
-constexpr size_t kCharsPerLine = 17;
+constexpr size_t kCharsPerLine = 18;
 constexpr int kButtonsTop = 184;
 
 std::string safeText(const std::string& input) {
@@ -122,9 +122,9 @@ void drawButton(UiAction action, int x) {
     M5.Display.fillRect(x + 4, kButtonsTop + 4, 152, 48, TFT_DARKGREEN);
     M5.Display.drawRect(x + 4, kButtonsTop + 4, 152, 48, TFT_WHITE);
     M5.Display.setTextColor(TFT_WHITE, TFT_DARKGREEN);
-    M5.Display.setTextSize(3);
-    M5.Display.setCursor(x + 12, kButtonsTop + 16);
-    M5.Display.print(actionLabel(action));
+    M5.Display.setFont(&fonts::DejaVu24);
+    M5.Display.setTextSize(1);
+    M5.Display.drawString(actionLabel(action), x + 12, kButtonsTop + 16);
 }
 #endif
 } // namespace
@@ -139,7 +139,6 @@ void Ui::start(UiScreen screen, const std::string& title) {
     lines_.clear();
 }
 
-void Ui::setPrinterName(const std::string& name) { printer_ = safeText(name); }
 void Ui::setConnections(bool wifi, bool nfc, bool bridge) {
     wifi_ = wifi;
     nfc_ = nfc;
@@ -147,22 +146,40 @@ void Ui::setConnections(bool wifi, bool nfc, bool bridge) {
     view_.wifi = wifi;
     view_.nfc = nfc;
     view_.bridge = bridge && !view_.stale;
+    if (view_.screen == UiScreen::Home || view_.screen == UiScreen::Working ||
+        view_.screen == UiScreen::Error) view_.status = connectionText(view_.bridge);
 }
 
 std::string Ui::connectionText(bool bridge) const {
-    return std::string("Wi-Fi") + (wifi_ ? "+" : "-") + " NFC" + (nfc_ ? "+" : "-") +
-           " Bridge" + (bridge ? "+" : "-");
+    if (!wifi_) return "Wi-Fi disconnected";
+    if (!nfc_) return "NFC reader unavailable";
+    if (view_.spool_error == ApiError::MissingSpool) return "Spool not found";
+    if (view_.spool_error == ApiError::ArchivedSpool) return "Spool archived";
+    if (view_.spool_error != ApiError::None) return "Spoolman unavailable";
+    if (!bridge) return "FilaBridge unavailable";
+    return "";
 }
 
-void Ui::showHome(const Mapping& mapping, const SpoolInfo* spool) {
-    start(UiScreen::Home, printer_);
+void Ui::showHome(const Mapping& mapping, const SpoolInfo* spool, ApiError spool_error) {
+    start(UiScreen::Home, "");
+    view_.spool_error = spool_error;
     view_.status = connectionText(bridge_ && !mapping.stale);
     view_.stale = mapping.stale;
     if (mapping.stale) view_.bridge = false;
     view_.right = UiAction::Status;
-    if (mapping.stale) lines_.push_back({"Stale", 0});
+    if (mapping.stale) {
+        if (spool && spool->id == mapping.spool_id) {
+            lines_.push_back({"Last known spool:", 0});
+            const std::string material = spoolMaterial(*spool);
+            if (!material.empty()) lines_.push_back({safeText(material), 0});
+            if (!spool->name.empty()) lines_.push_back({safeText(spool->name), 0});
+            lines_.push_back({remainingText(spool->remaining_g), 0});
+        } else lines_.push_back({"Mapping unavailable", 0});
+        return;
+    }
     if (!mapping.spool_id) {
         lines_.push_back({"No spool loaded", 0});
+        lines_.push_back({" ", 2});
         lines_.push_back({"Tap reel to load", 2});
         return;
     }
@@ -170,13 +187,12 @@ void Ui::showHome(const Mapping& mapping, const SpoolInfo* spool) {
         lines_.push_back({"Spool details unavailable", 0});
         return;
     }
-    lines_.push_back({"LOADED SPOOL", 3});
     const std::string material = spoolMaterial(*spool);
     if (!material.empty()) lines_.push_back({safeText(material), 0});
     if (!spool->name.empty()) lines_.push_back({safeText(spool->name), 1});
     lines_.push_back({remainingText(spool->remaining_g), 0});
-    lines_.push_back({"Tap reel to load another", 2});
-    view_.color_hex = spool->color_hex;
+    lines_.push_back({" ", 2});
+    lines_.push_back({"Tap reel to load", 2});
     if (!mapping.stale) view_.left = UiAction::Unload;
 }
 
@@ -192,8 +208,8 @@ void Ui::showTag(const TagRead& tag, const TagHints& hints, const ScanMatch& mat
         lines_.push_back({remainingText(match.spool.remaining_g), 0});
         if (tag.ndef_malformed) lines_.push_back({"Tag data unreadable", 1});
         if (current_spool && current_spool->id) {
-            lines_.push_back({"Current spool", 2});
-            lines_.push_back({safeText(current_spool->name), static_cast<uint8_t>(tag.ndef_malformed ? 2 : 1)});
+            lines_.push_back({current_spool->name.empty() ? "Current spool" :
+                              safeText("Current: " + current_spool->name), 2});
         }
         view_.color_hex = match.spool.color_hex;
         view_.left = UiAction::Load;
@@ -210,15 +226,18 @@ void Ui::showTag(const TagRead& tag, const TagHints& hints, const ScanMatch& mat
         lines_.push_back({safeText(tag.uid), 0});
         if (tag.ndef_malformed) lines_.push_back({"Tag data unreadable", 1});
         else {
-            lines_.push_back({safeText(tag.type), 1});
             const std::string material = hints.material_type.empty() ? hints.material : hints.material_type;
+            const bool has_details = !hints.brand.empty() || !material.empty() ||
+                                     !hints.identifier.empty() ||
+                                     (std::isfinite(hints.nominal_weight_g) && hints.nominal_weight_g > 0);
+            if (!has_details) lines_.push_back({safeText(tag.type), 1});
             if (!hints.brand.empty() || !material.empty())
-                lines_.push_back({safeText(hints.brand + " " + material), 1});
+                lines_.push_back({safeText(hints.brand + " " + material), 0});
             if (!hints.material_type.empty() && !hints.material.empty())
-                lines_.push_back({safeText(hints.material), 2});
+                lines_.push_back({safeText(hints.material), 3});
             if (!hints.identifier.empty()) lines_.push_back({safeText(hints.identifier), 3});
             if (std::isfinite(hints.nominal_weight_g) && hints.nominal_weight_g > 0)
-                lines_.push_back({"Nominal " + std::to_string(static_cast<long>(std::lround(hints.nominal_weight_g))) + "g", 3});
+                lines_.push_back({"Nominal " + std::to_string(static_cast<long>(std::lround(hints.nominal_weight_g))) + " g", 1});
             if (!hints.min_temp_c.empty() || !hints.max_temp_c.empty())
                 lines_.push_back({safeText(hints.min_temp_c + "-" + hints.max_temp_c + "C"), 3});
             view_.color_hex = hints.color_hex;
@@ -228,16 +247,27 @@ void Ui::showTag(const TagRead& tag, const TagHints& hints, const ScanMatch& mat
     view_.right = UiAction::Back;
 }
 
-void Ui::showWorking() {
-    start(UiScreen::Working, "Working");
+void Ui::showWorking(const char* activity) {
+    start(UiScreen::Working, activity);
     view_.status = connectionText(bridge_);
     lines_.push_back({"Please wait", 0});
 }
 
-void Ui::showError(ApiError error) {
-    start(UiScreen::Error, "Error");
-    view_.status = connectionText(bridge_);
-    lines_.push_back({errorText(error), 0});
+void Ui::showError(ApiError error, const char* failed_operation) {
+    if (error == ApiError::ArchivedSpool || error == ApiError::MissingSpool) {
+        start(UiScreen::Error, errorText(error));
+        lines_.push_back({error == ApiError::ArchivedSpool ? "Cannot load" : "Check in Spoolman", 0});
+    } else if (failed_operation && error != ApiError::InvalidTag) {
+        start(UiScreen::Error, "");
+        view_.spool_error = error;
+        view_.status = connectionText(bridge_);
+        lines_.push_back({failed_operation, 0});
+        lines_.push_back({"Back to retry", 0});
+    } else {
+        start(UiScreen::Error, "Error");
+        view_.status = connectionText(bridge_);
+        lines_.push_back({errorText(error), 0});
+    }
     view_.right = UiAction::Back;
 }
 
@@ -309,26 +339,22 @@ UiAction Ui::pollAction() const {
 }
 
 void Ui::render() const {
-    const uint32_t background = view_.screen == UiScreen::Error ? TFT_MAROON :
-                                view_.screen == UiScreen::Working ? TFT_NAVY :
+    const uint32_t background = view_.screen == UiScreen::Working ? TFT_NAVY :
                                 view_.screen == UiScreen::Confirm ? TFT_DARKGREEN : TFT_BLACK;
     M5.Display.fillScreen(background);
     M5.Display.setTextColor(TFT_WHITE, background);
-    M5.Display.setTextSize(3);
+    M5.Display.setFont(&fonts::DejaVu24);
+    M5.Display.setTextSize(1);
+    M5.Display.setTextDatum(textdatum_t::top_left);
     int y = 4;
     for (const auto& line : wrap(view_.title)) {
-        M5.Display.setCursor(4, y);
-        M5.Display.print(line.c_str());
+        M5.Display.drawString(line.c_str(), 4, y);
         y += 26;
     }
     if (!view_.status.empty()) {
-        M5.Display.setTextSize(3);
-        M5.Display.setCursor(4, y);
-        M5.Display.print(view_.wifi ? "Wi-Fi+" : "Wi-Fi-");
-        M5.Display.setCursor(112, y);
-        M5.Display.print(view_.nfc ? "NFC+" : "NFC-");
-        M5.Display.setCursor(190, y);
-        M5.Display.print(view_.bridge ? "Bridge+" : "Bridge-");
+        M5.Display.setTextColor(TFT_RED, background);
+        M5.Display.drawString(view_.status.c_str(), 4, y);
+        M5.Display.setTextColor(TFT_WHITE, background);
         y += 28;
     }
     if (view_.color_hex.size() == 6 && view_.title.size() <= 15) {
@@ -344,11 +370,9 @@ void Ui::render() const {
             M5.Display.drawRect(293, 6, 20, 20, TFT_WHITE);
         }
     }
-    M5.Display.setTextSize(3);
     const size_t slots = y < kButtonsTop ? static_cast<size_t>((kButtonsTop - y) / 27) : 0;
     for (const auto& line : visibleLines(slots)) {
-        M5.Display.setCursor(4, y);
-        M5.Display.print(line.c_str());
+        M5.Display.drawString(line.c_str(), 4, y);
         y += 27;
     }
     drawButton(view_.left, 0);

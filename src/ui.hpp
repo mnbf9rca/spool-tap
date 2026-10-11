@@ -20,17 +20,17 @@ struct UiView {
     bool wifi = false;
     bool nfc = false;
     bool bridge = false;
+    ApiError spool_error = ApiError::None;
 };
 
 class Ui {
 public:
-    void setPrinterName(const std::string& name);
     void setConnections(bool wifi, bool nfc, bool bridge);
-    void showHome(const Mapping& mapping, const SpoolInfo* spool);
+    void showHome(const Mapping& mapping, const SpoolInfo* spool, ApiError spool_error = ApiError::None);
     void showTag(const TagRead& tag, const TagHints& hints, const ScanMatch& match,
                  const SpoolInfo* current_spool);
-    void showWorking();
-    void showError(ApiError error);
+    void showWorking(const char* activity);
+    void showError(ApiError error, const char* failed_operation = nullptr);
     void showConfirm(UiAction operation, const SpoolInfo& spool);
     void showSuccess(bool loading, const SpoolInfo& spool);
     void showStatus(const std::string& ip, const std::string& version);
@@ -48,7 +48,6 @@ private:
     std::string connectionText(bool bridge) const;
     UiView view_;
     std::vector<Line> lines_;
-    std::string printer_ = "Core One";
     bool wifi_ = false;
     bool nfc_ = false;
     bool bridge_ = false;
