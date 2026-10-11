@@ -3,6 +3,8 @@
 Firmware for an M5Stack CoreS3 SE with a Grove U216 NFC reader on Port A.
 It scans tagged filament spools and confirms load or unload changes through FilaBridge.
 
+The printed CoreS3 wedge and NFC dock are described in [cad/README.md](cad/README.md).
+
 ## Build and flash
 
 Connect the CoreS3 SE and U216 to Port A.
