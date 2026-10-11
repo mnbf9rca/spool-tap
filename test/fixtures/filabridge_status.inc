@@ -1,0 +1,2 @@
+R"JSON({"printers":{"printer-a":{"name":"Core One","state":"FINISHED"},"printer-b":{"name":"Side Printer","state":"IDLE"}},"toolhead_mappings":{"printer-a":{"0":{"printer_name":"Core One","toolhead_id":0,"spool_id":7}},"printer-b":{"2":{"printer_name":"Side Printer","toolhead_id":2,"spool_id":9}}},"positions":{},"timestamp":"2026-10-10T00:00:00Z"}
+)JSON"
