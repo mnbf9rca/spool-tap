@@ -205,7 +205,7 @@ void test_scan_requires_load_and_confirmation_before_mapping() {
     press(ui, app, UiAction::Confirm);
     TEST_ASSERT_EQUAL_INT(1, services.map_calls);
     TEST_ASSERT_EQUAL_UINT32(9, services.mapped_id);
-    TEST_ASSERT_EQUAL_INT(static_cast<int>(UiScreen::Success), static_cast<int>(ui.display.view().screen));
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(UiScreen::Home), static_cast<int>(ui.display.view().screen));
     TEST_ASSERT_TRUE(hasLine(ui.display, "Spool 9"));
     TEST_ASSERT_FALSE(hasLine(ui.display, "Old scan name"));
 }
@@ -267,8 +267,7 @@ void test_unload_names_current_spool_and_maps_zero_only_after_confirmation() {
     press(ui, app, UiAction::Confirm);
     TEST_ASSERT_EQUAL_INT(1, services.map_calls);
     TEST_ASSERT_EQUAL_UINT32(0, services.mapped_id);
-    TEST_ASSERT_EQUAL_INT(static_cast<int>(UiScreen::Success), static_cast<int>(ui.display.view().screen));
-    press(ui, app, UiAction::Back);
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(UiScreen::Home), static_cast<int>(ui.display.view().screen));
     TEST_ASSERT_TRUE(hasLine(ui.display, "No spool loaded"));
 }
 
@@ -380,7 +379,7 @@ void test_result_screen_accepts_next_tag_without_back() {
 
     press(ui, app, UiAction::Load);
     press(ui, app, UiAction::Confirm);
-    TEST_ASSERT_EQUAL_INT(static_cast<int>(UiScreen::Success), static_cast<int>(ui.display.view().screen));
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(UiScreen::Home), static_cast<int>(ui.display.view().screen));
     reader.present = false;
     app.tick();
     services.scan_result = linked(12);

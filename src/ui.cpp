@@ -305,18 +305,11 @@ void Ui::showError(ApiError error, const char* failed_operation) {
 void Ui::showConfirm(UiAction operation, const SpoolInfo& spool) {
     if (operation != UiAction::Load && operation != UiAction::Unload) return;
     start(UiScreen::Confirm, operation == UiAction::Load ? "Load spool?" : "Unload spool?");
-    lines_.push_back({safeText(spool.name), 0});
     const std::string material = spoolMaterial(spool);
     if (!material.empty()) lines_.push_back({safeText(material), 0});
+    if (!spool.name.empty()) lines_.push_back({safeText(spool.name), 0});
     view_.left = UiAction::Confirm;
     view_.right = UiAction::Cancel;
-}
-
-void Ui::showSuccess(bool loading, const SpoolInfo& spool) {
-    start(UiScreen::Success, loading ? "Spool loaded" : "Spool unloaded");
-    if (!spool.name.empty()) lines_.push_back({safeText(spool.name), 0});
-    lines_.push_back({"Mapping confirmed", 1});
-    view_.right = UiAction::Back;
 }
 
 void Ui::showStatus(const std::string& ip, const std::string& version) {

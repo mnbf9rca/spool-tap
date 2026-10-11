@@ -7,7 +7,7 @@
 #include "tap_types.hpp"
 
 enum class UiAction { None, Load, Unload, Confirm, Cancel, Back, Status };
-enum class UiScreen { Home, Tag, Working, Error, Confirm, Status, Success, Update };
+enum class UiScreen { Home, Tag, Working, Error, Confirm, Status, Update };
 
 struct UiView {
     UiScreen screen = UiScreen::Working;
@@ -38,7 +38,6 @@ public:
                      ApiError spool_error = ApiError::None) const;
     void showError(ApiError error, const char* failed_operation = nullptr);
     void showConfirm(UiAction operation, const SpoolInfo& spool);
-    void showSuccess(bool loading, const SpoolInfo& spool);
     void showStatus(const std::string& ip, const std::string& version);
     void showUpdateProgress(size_t bytes);
     void showUpdateResult(bool success);

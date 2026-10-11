@@ -23,6 +23,15 @@ Set `PLATFORMIO_CORE_DIR`, `UV_CACHE_DIR`, or `UV_TOOL_DIR` before invoking the 
 
 The `cores3` environment uses 16 MB dual-slot partitions and DIO flash mode.
 QIO caused a watchdog boot loop during the spike.
+The `rollback_probe` environment deliberately reboots before update validation; upload it only for a controlled rollback test.
+
+## Use
+
+Link a physical spool's tag in Spoolman's Tags → Add tag dialog.
+Tap the tag on the U216, check the M5 preview and current assignment, then press Load and confirm to map that spool in FilaBridge.
+Press Cancel to leave the assignment unchanged.
+To unload, press Unload on Home and confirm the named spool; the tag is not needed.
+After either confirmed action, Home shows the refreshed assignment.
 
 ## Device web pages
 

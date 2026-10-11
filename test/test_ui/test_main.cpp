@@ -331,6 +331,26 @@ void test_working_confirmation_status_and_touch_bounds() {
     TEST_ASSERT_EQUAL_INT(static_cast<int>(UiAction::Back), static_cast<int>(ui.actionAt(220, 210)));
 }
 
+void test_confirm_spool_details_keep_preview_order() {
+    Ui ui;
+    TagRead tag;
+    TagHints hints;
+    ScanMatch match;
+    match.kind = ScanKind::Spool;
+    match.spool_id = 7;
+    match.spool = spool();
+    ui.showTag(tag, hints, match, nullptr);
+    const auto preview = ui.visibleLines(5);
+    TEST_ASSERT_EQUAL_STRING("Buddy3d PLA", preview[0].c_str());
+    TEST_ASSERT_EQUAL_STRING("Jet Black", preview[1].c_str());
+    for (UiAction action : {UiAction::Load, UiAction::Unload}) {
+        ui.showConfirm(action, match.spool);
+        const auto confirm = ui.visibleLines(5);
+        TEST_ASSERT_EQUAL_STRING(preview[0].c_str(), confirm[0].c_str());
+        TEST_ASSERT_EQUAL_STRING(preview[1].c_str(), confirm[1].c_str());
+    }
+}
+
 void test_long_and_untrusted_tag_text_is_wrapped_and_sanitized() {
     Ui ui;
     TagRead tag;
@@ -431,6 +451,7 @@ void setup() {
     RUN_TEST(test_unreadable_ndef_keeps_linked_spool_loadable);
     RUN_TEST(test_unreadable_ndef_without_spool_prompts_for_assignment);
     RUN_TEST(test_working_confirmation_status_and_touch_bounds);
+    RUN_TEST(test_confirm_spool_details_keep_preview_order);
     RUN_TEST(test_long_and_untrusted_tag_text_is_wrapped_and_sanitized);
     RUN_TEST(test_wrapping_does_not_split_a_utf8_character);
     RUN_TEST(test_open_tag_hints_are_available_when_screen_has_space);

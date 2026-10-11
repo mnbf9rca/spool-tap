@@ -182,7 +182,6 @@ void App::confirm(UiAction operation, uint32_t now) {
 
     // shortcut: FilaBridge has no conditional mapping API; another remap can race this precheck.
     const uint32_t target = operation == UiAction::Load ? candidate_.spool_id : 0;
-    const SpoolInfo previous_spool = current_spool_;
     Mapping after = mapping_;
     ui.showWorking(operation == UiAction::Load ? "Loading spool" : "Unloading spool");
     ui.render();
@@ -200,9 +199,6 @@ void App::confirm(UiAction operation, uint32_t now) {
     if (logs_) logs_->add(LogLevel::Info, operation == UiAction::Load ?
                          LogEvent::LoadConfirmed : LogEvent::UnloadConfirmed,
                          "FilaBridge spool #" + std::to_string(after.spool_id));
-    ui.showSuccess(operation == UiAction::Load,
-                   operation == UiAction::Load ? current_spool_ : previous_spool);
-    ui.render();
 }
 
 void App::settingsChanged() {
@@ -288,7 +284,7 @@ void App::tick() {
     TagHints hints;
     const bool presented = reader_.poll(tag, hints);
     const bool scan_screen = before == UiScreen::Home || before == UiScreen::Tag ||
-                             before == UiScreen::Error || before == UiScreen::Success;
+                             before == UiScreen::Error;
     if (!presented || !scan_screen || action != UiAction::None ||
         !have_home_ || mapping_.stale) return;
     ui.showWorking("Checking tag");
