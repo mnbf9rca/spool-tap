@@ -11,6 +11,7 @@
 #include "ui.hpp"
 #include "logs.hpp"
 #include "web.hpp"
+#include "ota.hpp"
 
 namespace {
 NfcReader reader;
@@ -21,9 +22,12 @@ Services services(net, settings);
 Ui ui;
 Logs logs;
 bool settings_change_pending = false;
-Web web(logs, settings, settings_store, settings_change_pending);
+ArduinoOtaPort ota_port;
+Ota ota(ota_port);
+Web web(logs, settings, settings_store, settings_change_pending, ota, ui);
 bool reader_ready = false;
 uint32_t last_heartbeat = 0;
+bool boot_validated = false;
 
 void pumpWeb() { web.tick(false); }
 
@@ -110,7 +114,7 @@ DeviceServices app_services(services);
 DeviceUi app_ui(ui);
 DeviceClock app_clock;
 App app(app_reader, app_services, app_ui, app_clock, &logs, &settings,
-        &settings_change_pending);
+        &settings_change_pending, &ota);
 
 void updateConnections() {
     const bool wifi = WiFi.status() == WL_CONNECTED;
@@ -144,6 +148,7 @@ void setup() {
     ui.showWorking();
     ui.render();
     Serial.printf("SPOOL_TAP_BOOT NFC_READY=%d\n", reader_ready);
+    Serial.printf("SPOOL_TAP_VERSION=%s\n", SPOOL_TAP_VERSION);
     Serial.println("NET_WAIT Wi-Fi and clock");
 }
 
@@ -154,6 +159,10 @@ void loop() {
     app.tick();
     web.tick();
     updateConnections();
+    if (!boot_validated && ota.validateHealthyLoop()) {
+        boot_validated = true;
+    }
+    if (web.rebootDue()) ESP.restart();
     if (millis() - last_heartbeat >= 2000) {
         Serial.printf("SPOOL_TAP_LOOP NFC_READY=%d\n", reader_ready);
         last_heartbeat = millis();

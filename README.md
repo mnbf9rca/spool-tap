@@ -32,6 +32,10 @@ Sign in with username `spool-tap` and the OTA password from the `spool-tap/devic
 Edit the Spoolman and FilaBridge HTTPS origins, printer name, toolhead ID, and scan reader ID there.
 Save the form to persist all five values together and refresh the mapping without a reboot.
 Open `http://<device-ip>/logs` with the same sign-in to see recent safe events.
+Open `http://<device-ip>/update` with the same sign-in to upload a complete application `firmware.bin`.
+Keep the CoreS3 powered until the screen reports the result and the device reboots.
+For a terminal upload, run `curl --digest -u spool-tap -F 'firmware=@.pio/build/cores3/firmware.bin' http://<device-ip>/update` and enter the password when prompted.
+The Status screen shows the running firmware version after reboot.
 
 The settings page shows only those five non-secret values.
 Wi-Fi credentials and the OTA password still come from `.env.tpl` at build time; changing them requires a rebuild and upload.

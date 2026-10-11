@@ -56,6 +56,21 @@ void test_loaded_home_shows_current_spool_status_and_unload() {
     TEST_ASSERT_EQUAL_INT(static_cast<int>(UiAction::None), static_cast<int>(ui.actionAt(40, 160)));
 }
 
+void test_update_screen_reports_progress_and_failure_without_mapping_action() {
+    Ui ui;
+    ui.showUpdateProgress(131072);
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(UiScreen::Update), static_cast<int>(ui.view().screen));
+    TEST_ASSERT_TRUE(hasLine(ui.visibleLines(5), "128 KB received"));
+    TEST_ASSERT_TRUE(hasLine(ui.visibleLines(5), "Keep power on"));
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(UiAction::None), static_cast<int>(ui.actionAt(40, 210)));
+    ui.showUpdateResult(false);
+    TEST_ASSERT_TRUE(hasLine(ui.visibleLines(5), "Current image"));
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(UiAction::Back), static_cast<int>(ui.actionAt(220, 210)));
+    ui.showUpdateResult(true);
+    TEST_ASSERT_TRUE(hasLine(ui.visibleLines(5), "Rebooting"));
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(UiAction::None), static_cast<int>(ui.actionAt(220, 210)));
+}
+
 void test_home_drop_order_and_unknown_remaining() {
     Ui ui;
     SpoolInfo loaded = spool();
@@ -317,6 +332,7 @@ void setup() {
     Serial.begin(115200);
     delay(2000);
     UNITY_BEGIN();
+    RUN_TEST(test_update_screen_reports_progress_and_failure_without_mapping_action);
     RUN_TEST(test_loaded_home_shows_current_spool_status_and_unload);
     RUN_TEST(test_home_drop_order_and_unknown_remaining);
     RUN_TEST(test_empty_or_stale_home_cannot_unload);

@@ -9,7 +9,8 @@ enum class LogLevel { Info, Warning, Error };
 enum class LogEvent {
     Boot, ReaderReady, ReaderUnavailable, SettingsFallback, WifiConnected, WifiLost,
     MappingReady, MappingFailed, SpoolFailed, TagScanned, ScanFailed,
-    LoadConfirmed, UnloadConfirmed, MappingWriteFailed, SettingsChanged
+    LoadConfirmed, UnloadConfirmed, MappingWriteFailed, SettingsChanged,
+    UpdateStarted, UpdateFailed, UpdateReady
 };
 
 struct LogEntry {

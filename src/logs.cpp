@@ -30,6 +30,9 @@ const char* eventText(LogEvent event) {
     case LogEvent::UnloadConfirmed: return "Spool unloaded";
     case LogEvent::MappingWriteFailed: return "Mapping change failed";
     case LogEvent::SettingsChanged: return "Settings changed";
+    case LogEvent::UpdateStarted: return "Firmware upload started";
+    case LogEvent::UpdateFailed: return "Firmware upload failed";
+    case LogEvent::UpdateReady: return "Firmware update ready; rebooting";
     }
     return "Unknown event";
 }

@@ -2,6 +2,11 @@
 
 #include "logs.hpp"
 #include "settings.hpp"
+#include "ota.hpp"
+
+#ifndef SPOOL_TAP_VERSION
+#define SPOOL_TAP_VERSION "v1.0.0"
+#endif
 
 bool App::showMapping(const Mapping& observed, uint32_t now) {
     Ui& ui = ui_.ui();
@@ -117,6 +122,17 @@ void App::settingsChanged() {
 }
 
 void App::tick() {
+    if (ota_ && (ota_->busy() || ota_->staged() || ota_->ready())) return;
+    if (ota_ && ota_->failed()) {
+        if (ui_.pollAction() == UiAction::Back) {
+            ota_->dismissFailure();
+            refresh_pending_ = true;
+            attempted_ = false;
+            ui_.ui().showWorking();
+            ui_.ui().render();
+        }
+        return;
+    }
     if (settings_change_pending_ && *settings_change_pending_) {
         *settings_change_pending_ = false;
         settingsChanged();
@@ -135,7 +151,7 @@ void App::tick() {
 
     const UiScreen before = ui.view().screen;
     if (action == UiAction::Status && before == UiScreen::Home) {
-        ui.showStatus(ui_.ipAddress(), "v1");
+        ui.showStatus(ui_.ipAddress(), SPOOL_TAP_VERSION);
         ui.render();
     } else if (action == UiAction::Back || action == UiAction::Cancel) {
         pending_ = UiAction::None;

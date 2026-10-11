@@ -3,6 +3,7 @@
 
 #include "app.hpp"
 #include "settings.hpp"
+#include "ota.hpp"
 
 namespace {
 SpoolInfo spool(uint32_t id) {
@@ -116,6 +117,43 @@ public:
     uint32_t now = 0;
     uint32_t millis() const override { return now; }
 };
+
+class FakeOtaPort : public OtaPort {
+public:
+    bool inactiveSlot(size_t& capacity) override { capacity = 64; return true; }
+    bool begin(size_t) override { return true; }
+    size_t write(const uint8_t*, size_t count) override { return count; }
+    bool finish(size_t) override { return true; }
+    void abort() override {}
+    bool pendingVerify(bool& pending) override { pending = false; return true; }
+    bool markValid() override { return true; }
+};
+
+void test_ota_upload_blocks_mapping_and_scans() {
+    FakeReader reader;
+    FakeServices services;
+    services.server_spool = 7;
+    FakeUi ui;
+    FakeClock clock;
+    FakeOtaPort port;
+    Ota ota(port);
+    App app(reader, services, ui, clock, nullptr, nullptr, nullptr, &ota);
+    app.tick();
+    const int polls = reader.polls;
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(OtaStatus::Receiving),
+                          static_cast<int>(ota.handleUpload(UploadStage::Start)));
+    reader.present = true;
+    ui.next = UiAction::Unload;
+    app.tick();
+    TEST_ASSERT_EQUAL_INT(polls, reader.polls);
+    TEST_ASSERT_EQUAL_INT(0, services.scan_calls);
+    TEST_ASSERT_EQUAL_INT(0, services.map_calls);
+    TEST_ASSERT_EQUAL_INT(static_cast<int>(UiScreen::Home), static_cast<int>(ui.display.view().screen));
+    ota.handleUpload(UploadStage::Abort);
+    ui.next = UiAction::Back;
+    app.tick();
+    TEST_ASSERT_EQUAL_INT(0, services.map_calls);
+}
 
 void present(FakeReader& reader, App& app) {
     reader.present = true;
@@ -444,6 +482,7 @@ void setup() {
     RUN_TEST(test_rejected_and_uncertain_writes_show_error_then_fresh_mapping);
     RUN_TEST(test_settings_change_clears_preview_and_blocks_actions_until_refresh);
     RUN_TEST(test_deferred_web_setting_change_applies_at_next_tick);
+    RUN_TEST(test_ota_upload_blocks_mapping_and_scans);
     UNITY_END();
 }
 

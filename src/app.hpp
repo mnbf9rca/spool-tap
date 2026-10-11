@@ -4,13 +4,15 @@
 
 class Logs;
 class Settings;
+class Ota;
 
 class App {
 public:
     App(ReaderPort& reader, ServicesPort& services, UiPort& ui, ClockPort& clock,
-        Logs* logs = nullptr, Settings* settings = nullptr, bool* settings_change_pending = nullptr)
+        Logs* logs = nullptr, Settings* settings = nullptr, bool* settings_change_pending = nullptr,
+        Ota* ota = nullptr)
         : reader_(reader), services_(services), ui_(ui), clock_(clock), logs_(logs),
-          settings_(settings), settings_change_pending_(settings_change_pending) {}
+          settings_(settings), settings_change_pending_(settings_change_pending), ota_(ota) {}
 
     void tick();
     void settingsChanged();
@@ -28,6 +30,7 @@ private:
     Logs* logs_;
     Settings* settings_;
     bool* settings_change_pending_;
+    Ota* ota_;
     Mapping mapping_;
     SpoolInfo current_spool_;
     TagRead candidate_tag_;

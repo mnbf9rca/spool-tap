@@ -268,6 +268,18 @@ void Ui::showStatus(const std::string& ip, const std::string& version) {
     view_.right = UiAction::Back;
 }
 
+void Ui::showUpdateProgress(size_t bytes) {
+    start(UiScreen::Update, "Updating");
+    lines_.push_back({std::to_string(bytes / 1024) + " KB received", 0});
+    lines_.push_back({"Keep power on", 0});
+}
+
+void Ui::showUpdateResult(bool success) {
+    start(UiScreen::Update, success ? "Update ready" : "Update failed");
+    lines_.push_back({success ? "Rebooting" : "Current image kept", 0});
+    if (!success) view_.right = UiAction::Back;
+}
+
 std::vector<std::string> Ui::visibleLines(size_t slots) const {
     if (!slots) return {};
     std::vector<std::string> result;
