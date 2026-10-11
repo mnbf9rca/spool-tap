@@ -32,6 +32,8 @@ public:
                  const SpoolInfo* current_spool);
     void showWorking(const char* activity);
     void setHomeActivity(const char* activity);
+    bool homeMatches(const Mapping& mapping, const SpoolInfo* spool,
+                     ApiError spool_error = ApiError::None) const;
     void showError(ApiError error, const char* failed_operation = nullptr);
     void showConfirm(UiAction operation, const SpoolInfo& spool);
     void showSuccess(bool loading, const SpoolInfo& spool);

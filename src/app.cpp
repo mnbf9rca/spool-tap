@@ -33,6 +33,7 @@ bool App::showMapping(const Mapping& observed, uint32_t now) {
             return false;
         }
     }
+    const bool same_home = ui.homeMatches(observed, observed.spool_id ? &details : nullptr);
     mapping_ = observed;
     if (logs_) logs_->add(LogLevel::Info, LogEvent::MappingReady);
     mapping_.stale = false;
@@ -41,7 +42,8 @@ bool App::showMapping(const Mapping& observed, uint32_t now) {
     refresh_pending_ = false;
     last_refresh_ = now;
     ui.showHome(mapping_, mapping_.spool_id ? &current_spool_ : nullptr);
-    ui.render();
+    if (same_home) ui.renderHomeActivity();
+    else ui.render();
     return true;
 }
 

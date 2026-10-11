@@ -72,6 +72,22 @@ void test_home_activity_preserves_content_and_clears_on_next_screen() {
     TEST_ASSERT_EQUAL_STRING("", ui.view().activity.c_str());
 }
 
+void test_home_match_detects_only_visible_changes() {
+    Ui ui;
+    ui.setConnections(true, true, true);
+    Mapping mapping;
+    SpoolInfo loaded = spool();
+    mapping.spool_id = loaded.id;
+    ui.showHome(mapping, &loaded);
+    ui.setHomeActivity("Getting spool details...");
+    TEST_ASSERT_TRUE(ui.homeMatches(mapping, &loaded));
+    TEST_ASSERT_EQUAL_STRING("Getting spool details...", ui.view().activity.c_str());
+    loaded.remaining_g = 100;
+    TEST_ASSERT_FALSE(ui.homeMatches(mapping, &loaded));
+    mapping.stale = true;
+    TEST_ASSERT_FALSE(ui.homeMatches(mapping, &loaded));
+}
+
 void test_update_screen_reports_progress_and_failure_without_mapping_action() {
     Ui ui;
     ui.showUpdateProgress(131072);
@@ -379,6 +395,7 @@ void setup() {
     RUN_TEST(test_update_screen_reports_progress_and_failure_without_mapping_action);
     RUN_TEST(test_loaded_home_shows_current_spool_status_and_unload);
     RUN_TEST(test_home_activity_preserves_content_and_clears_on_next_screen);
+    RUN_TEST(test_home_match_detects_only_visible_changes);
     RUN_TEST(test_home_drop_order_and_unknown_remaining);
     RUN_TEST(test_empty_or_stale_home_cannot_unload);
     RUN_TEST(test_connection_changes_update_visible_home_status);

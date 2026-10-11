@@ -201,6 +201,14 @@ void Ui::setHomeActivity(const char* activity) {
     if (view_.screen == UiScreen::Home) view_.activity = activity;
 }
 
+bool Ui::homeMatches(const Mapping& mapping, const SpoolInfo* spool, ApiError spool_error) const {
+    if (view_.screen != UiScreen::Home || !view_.status.empty()) return false;
+    Ui next = *this;
+    next.showHome(mapping, spool, spool_error);
+    return next.view_.status.empty() && next.view_.left == view_.left &&
+           next.view_.right == view_.right && next.visibleLines(5) == visibleLines(5);
+}
+
 void Ui::showTag(const TagRead& tag, const TagHints& hints, const ScanMatch& match,
                  const SpoolInfo* current_spool) {
     if (match.kind == ScanKind::Spool && match.spool.archived) {
