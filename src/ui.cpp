@@ -381,16 +381,24 @@ void Ui::render() const {
         M5.Display.drawString(line.c_str(), 4, y);
         y += 27;
     }
-    if (view_.screen == UiScreen::Home && !view_.activity.empty()) {
-        M5.Display.setFont(&fonts::DejaVu12);
-        M5.Display.setTextColor(TFT_LIGHTGREY, background);
-        M5.Display.drawString(view_.activity.c_str(),
-                              316 - M5.Display.textWidth(view_.activity.c_str()), kHomeActivityTop);
-    }
+    if (view_.screen == UiScreen::Home) renderHomeActivity();
     drawButton(view_.left, 0);
     drawButton(view_.right, 160);
+}
+
+void Ui::renderHomeActivity() const {
+    if (view_.screen != UiScreen::Home) return;
+    M5.Display.fillRect(0, kHomeActivityTop, 320, kButtonsTop - kHomeActivityTop, TFT_BLACK);
+    if (view_.activity.empty()) return;
+    M5.Display.setFont(&fonts::DejaVu12);
+    M5.Display.setTextSize(1);
+    M5.Display.setTextDatum(textdatum_t::top_left);
+    M5.Display.setTextColor(TFT_LIGHTGREY, TFT_BLACK);
+    M5.Display.drawString(view_.activity.c_str(),
+                          316 - M5.Display.textWidth(view_.activity.c_str()), kHomeActivityTop);
 }
 #else
 UiAction Ui::pollAction() const { return UiAction::None; }
 void Ui::render() const {}
+void Ui::renderHomeActivity() const {}
 #endif

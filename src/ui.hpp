@@ -42,6 +42,7 @@ public:
     UiAction actionAt(int x, int y) const;
     UiAction pollAction() const;
     void render() const;
+    void renderHomeActivity() const;
     const UiView& view() const { return view_; }
 
 private:

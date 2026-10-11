@@ -11,9 +11,13 @@ bool App::showMapping(const Mapping& observed, uint32_t now) {
     Ui& ui = ui_.ui();
     SpoolInfo details;
     if (observed.spool_id) {
-        if (ui.view().screen == UiScreen::Home) ui.setHomeActivity("Getting spool details...");
-        else ui.showWorking("Getting spool details...");
-        ui.render();
+        if (ui.view().screen == UiScreen::Home) {
+            ui.setHomeActivity("Getting spool details...");
+            ui.renderHomeActivity();
+        } else {
+            ui.showWorking("Getting spool details...");
+            ui.render();
+        }
         ApiError error = ApiError::None;
         if (!services_.getSpool(observed.spool_id, details, error)) {
             if (logs_ && !mapping_.stale) logs_->add(LogLevel::Warning, LogEvent::SpoolFailed);
@@ -43,9 +47,13 @@ bool App::showMapping(const Mapping& observed, uint32_t now) {
 
 bool App::refreshHome(uint32_t now) {
     Ui& ui = ui_.ui();
-    if (ui.view().screen == UiScreen::Home) ui.setHomeActivity("Checking assignment...");
-    else ui.showWorking("Checking assignment...");
-    ui.render();
+    if (ui.view().screen == UiScreen::Home) {
+        ui.setHomeActivity("Checking assignment...");
+        ui.renderHomeActivity();
+    } else {
+        ui.showWorking("Checking assignment...");
+        ui.render();
+    }
     Mapping observed;
     ApiError error = ApiError::None;
     if (!services_.getMapping(observed, error)) {
