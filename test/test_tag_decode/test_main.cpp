@@ -7,6 +7,9 @@ namespace {
 const uint8_t sample[] = {
 #include "../fixtures/openprinttag_sample.inc"
 };
+const uint8_t prusament[] = {
+#include "../fixtures/prusament_openprinttag.inc"
+};
 
 NdefRecord record(const char* type, std::initializer_list<uint8_t> bytes) {
     NdefRecord result;
@@ -43,6 +46,22 @@ void test_sample_hints_are_descriptive_only() {
     TEST_ASSERT_EQUAL_STRING("473BB8CDE12945B89FCFDA1C3ADD9C47", hints.identifier.c_str());
     TEST_ASSERT_EQUAL_INT(1000, static_cast<int>(hints.nominal_weight_g));
     TEST_ASSERT_EQUAL_STRING("E00401086616DDD3", tag.uid.c_str());
+}
+
+void test_live_prusament_openprinttag_payload() {
+    NdefRecord tag;
+    tag.tnf = 2;
+    tag.type = "application/vnd.openprinttag";
+    tag.payload.assign(prusament, prusament + sizeof(prusament));
+    TagHints hints;
+    TEST_ASSERT_EQUAL_UINT32(245, sizeof(prusament));
+    TEST_ASSERT_TRUE(decodeTag({tag}, hints));
+    TEST_ASSERT_EQUAL_STRING("Prusament", hints.brand.c_str());
+    TEST_ASSERT_EQUAL_STRING("PETG Jet Black", hints.material.c_str());
+    TEST_ASSERT_EQUAL_STRING("PETG", hints.material_type.c_str());
+    TEST_ASSERT_EQUAL_STRING("292B2B", hints.color_hex.c_str());
+    TEST_ASSERT_EQUAL_STRING("8594173675100", hints.identifier.c_str());
+    TEST_ASSERT_EQUAL_INT(1000, static_cast<int>(hints.nominal_weight_g));
 }
 
 void test_unsorted_unknown_nested_keys_and_absent_optional_fields() {
@@ -139,6 +158,7 @@ void setup() {
     delay(2000);
     UNITY_BEGIN();
     RUN_TEST(test_sample_hints_are_descriptive_only);
+    RUN_TEST(test_live_prusament_openprinttag_payload);
     RUN_TEST(test_unsorted_unknown_nested_keys_and_absent_optional_fields);
     RUN_TEST(test_empty_aux_and_truncated_regions);
     RUN_TEST(test_openspool_and_bad_json);

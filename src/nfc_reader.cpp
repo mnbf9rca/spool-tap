@@ -1,4 +1,5 @@
 #include "nfc_reader.hpp"
+#include "type5_read.hpp"
 
 #include <Arduino.h>
 #include <wiring/m5_unit_unified_wiring.hpp>
@@ -76,12 +77,21 @@ bool NfcReader::poll(TagRead& out) {
             seen.type = picc.typeAsString();
             seen.capacity = picc.userAreaSize();
             seen.block_size = picc.block_size;
-            if (picc.valid() && seen.capacity <= kMaxTagMemoryBytes && layer_v_.reactivate(picc)) {
-                seen.memory.resize(seen.capacity);
-                uint16_t length = seen.memory.size();
-                if (!layer_v_.read(seen.memory.data(), length, 0) ||
-                    length != seen.memory.size()) seen.memory.clear();
-                layer_v_.deactivate();
+            if (picc.valid() && seen.capacity <= kMaxTagMemoryBytes) {
+                if (layer_v_.reactivate(picc)) {
+                    seen.memory.resize(seen.capacity);
+                    uint16_t failed_block = UINT16_MAX;
+                    if (!readType5Memory(seen.memory.data(), seen.memory.size(), seen.block_size,
+                        [this](uint8_t* bytes, uint16_t block) { return layer_v_.readBlock(bytes, block); },
+                        [this, &picc] { return layer_v_.reactivate(picc); }, failed_block)) {
+                        Serial.printf("NFC_V_READ_FAILED BLOCK=%u\n", failed_block);
+                        seen.memory.clear();
+                        seen.ndef_malformed = true;
+                    }
+                    layer_v_.deactivate();
+                } else {
+                    seen.ndef_malformed = true;
+                }
             }
             out = seen;
             return true;
