@@ -1,4 +1,4 @@
-"""Rough CoreS3 SE wedge and removable NFC reader dock."""
+"""Rough CoreS3 SE mounts and removable NFC reader docks."""
 
 from pathlib import Path
 
@@ -72,6 +72,54 @@ def nfc_dock():
     return dock
 
 
+def shelf_mount():
+    """One-piece hook for a 50 mm shelf, CoreS3 SE, and Grove NFC reader."""
+    # The 25 mm top hook carries the weight; the 50 mm plate bears against the shelf front.
+    mount = cq.Workplane("XY").box(120, 50, 4.5, centered=(True, False, False))
+    mount = mount.union(cq.Workplane("XY").box(120, 4, 29, centered=(True, False, False)).translate((0, 50, -24)))
+
+    # The open ring spaces the CoreS3 circuit board away from the shelf face.
+    core_x, core_y = 28, 25
+    ring = cq.Workplane("XY").center(core_x, core_y).box(58, 54, 3, centered=(True, True, False)).translate((0, 0, 4.5))
+    case_opening = cq.Workplane("XY").center(core_x, core_y).box(50, 50, 3, centered=(True, True, False)).edges("|Z").fillet(3.6).translate((0, 0, 7.5))
+    for x in (core_x - 22, core_x + 22):
+        for y in (core_y - 22, core_y + 22):
+            pad = cq.Workplane("XY").center(x, y).circle(4.5).extrude(3).translate((0, 0, 7.5))
+            ring = ring.union(pad.intersect(case_opening))
+    mount = mount.union(ring)
+    mount = mount.cut(cq.Workplane("XY").center(core_x, core_y).box(38, 38, 9, centered=(True, True, False)).translate((0, 0, -0.5)))
+    # Rear grid turns the 38 mm unsupported top edge into short bridges without filling the board cavity.
+    for x in (core_x - 9.5, core_x, core_x + 9.5):
+        mount = mount.union(cq.Workplane("XY").center(x, core_y).box(1.8, 39, 4.5, centered=(True, True, False)))
+        # Taper each rib toward the ring so its front edge is supported at the bridge layer.
+        mount = mount.union(cq.Workplane("YZ").polyline([(5.5, 4.5), (5.5, 7.5), (9.5, 4.5)]).close().extrude(1.8).translate((x - 0.9, 0, 0)))
+    mount = mount.union(cq.Workplane("XY").center(core_x, core_y).box(39, 1.8, 4.5, centered=(True, True, False)))
+    for x in (core_x - 22, core_x + 22):
+        for y in (core_y - 22, core_y + 22):
+            mount = mount.cut(cq.Workplane("XY").center(x, y).circle(3.6).extrude(5).translate((0, 0, -0.1)))
+            shaft = cq.Workplane("XY").center(x, y).circle(1.7).extrude(7).translate((0, 0, 4.4))
+            mount = mount.cut(shaft)
+            assert mount.intersect(shaft).val().Volume() < 1e-6
+
+    # Capture only the bottom 20 mm, leaving the reader top and center Grove exit free.
+    reader_x = -42
+    mount = mount.union(cq.Workplane("XY").center(reader_x, 25).box(30, 50, 3, centered=(True, True, False)).translate((0, 0, 4.5)))
+    for x in (reader_x - 13.4, reader_x + 13.4):
+        mount = mount.union(cq.Workplane("XY").center(x, 11).box(2, 20, 10.1, centered=(True, True, False)).translate((0, 0, 7.5)))
+    for x in (reader_x - 11.2, reader_x + 11.2):
+        mount = mount.union(cq.Workplane("XY").center(x, 11).box(3.8, 20, 1.5, centered=(True, True, False)).translate((0, 0, 16.1)))
+    for x in (reader_x - 11, reader_x + 11):
+        mount = mount.union(cq.Workplane("XY").center(x, 1.25).box(5, 2.5, 8.6, centered=(True, True, False)).translate((0, 0, 7.5)))
+
+    mount = mount.clean()
+    reader_clearance = cq.Workplane("XY").center(reader_x, 26.5).box(24.4, 48, 8.3, centered=(True, True, False)).translate((0, 0, 7.5))
+    assert mount.intersect(reader_clearance).val().Volume() < 1e-6
+    assert mount.val().isValid() and len(mount.solids().vals()) == 1
+    # Put the broad outside face of the top hook on the print bed.
+    return mount.rotate((0, 0, 0), (1, 0, 0), -90).translate((0, 24, 54))
+
+
 if __name__ == "__main__":
     cq.exporters.export(cores3_wedge(), str(OUT / "cores3_wedge_45.stl"), tolerance=0.08, angularTolerance=0.1)
     cq.exporters.export(nfc_dock(), str(OUT / "nfc_dock.stl"), tolerance=0.08, angularTolerance=0.1)
+    cq.exporters.export(shelf_mount(), str(OUT / "cores3_shelf_mount.stl"), tolerance=0.08, angularTolerance=0.1)
