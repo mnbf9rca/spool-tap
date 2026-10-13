@@ -133,6 +133,7 @@ void updateConnections() {
 void setup() {
     Serial.begin(115200);
     M5.begin();
+    M5.Display.setRotation(M5.Display.getRotation() ^ 2);
     logs.add(LogLevel::Info, LogEvent::Boot);
     reader_ready = reader.begin();
     logs.add(reader_ready ? LogLevel::Info : LogLevel::Warning,
